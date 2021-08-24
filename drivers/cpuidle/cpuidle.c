@@ -37,24 +37,6 @@ static int enabled_devices;
 static int off __read_mostly;
 static int initialized __read_mostly;
 
-#ifdef CONFIG_SMP
-static atomic_t idled = ATOMIC_INIT(0);
-
-#if NR_CPUS > 32
-#error idled CPU mask not big enough for NR_CPUS
-#endif
-
-void cpuidle_set_idle_cpu(unsigned int cpu)
-{
-	atomic_or(BIT(cpu), &idled);
-}
-
-void cpuidle_clear_idle_cpu(unsigned int cpu)
-{
-	atomic_andnot(BIT(cpu), &idled);
-}
-#endif
-
 int cpuidle_disabled(void)
 {
 	return off;
@@ -103,12 +85,12 @@ static int find_deepest_state(struct cpuidle_driver *drv,
 
 	for (i = 1; i < drv->state_count; i++) {
 		struct cpuidle_state *s = &drv->states[i];
-		struct cpuidle_state_usage *su = &dev->states_usage[i];
 
-		if (s->disabled || su->disable || s->exit_latency <= latency_req
-		    || s->exit_latency > max_latency
-		    || (s->flags & forbidden_flags)
-		    || (s2idle && !s->enter_s2idle))
+		if (dev->states_usage[i].disable ||
+		    s->exit_latency <= latency_req ||
+		    s->exit_latency > max_latency ||
+		    (s->flags & forbidden_flags) ||
+		    (s2idle && !s->enter_s2idle))
 			continue;
 
 		latency_req = s->exit_latency;
@@ -499,11 +481,15 @@ static void __cpuidle_device_init(struct cpuidle_device *dev)
  */
 static int __cpuidle_register_device(struct cpuidle_device *dev)
 {
-	int ret;
 	struct cpuidle_driver *drv = cpuidle_get_cpu_driver(dev);
+	int i, ret;
 
 	if (!try_module_get(drv->owner))
 		return -EINVAL;
+
+	for (i = 0; i < drv->state_count; i++)
+		if (drv->states[i].disabled)
+			dev->states_usage[i].disable |= CPUIDLE_STATE_DISABLED_BY_DRIVER;
 
 	per_cpu(cpuidle_devices, dev->cpu) = dev;
 	list_add(&dev->device_list, &cpuidle_detected_devices);
@@ -668,13 +654,6 @@ EXPORT_SYMBOL_GPL(cpuidle_register);
 static int cpuidle_latency_notify(struct notifier_block *b,
 		unsigned long l, void *v)
 {
-	unsigned long cpus = atomic_read(&idled) & *cpumask_bits(to_cpumask(v));
-
-	/* Use READ_ONCE to get the isolated mask outside cpu_add_remove_lock */
-	cpus &= ~READ_ONCE(*cpumask_bits(cpu_isolated_mask));
-	if (cpus)
-		arch_send_wakeup_ipi_mask(to_cpumask(&cpus));
-
 	return NOTIFY_OK;
 }
 
