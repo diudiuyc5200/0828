@@ -448,4 +448,3 @@ void subsystem_put_local(void *sub_system_handle)
 {
 	return subsystem_put(sub_system_handle);
 }
-
