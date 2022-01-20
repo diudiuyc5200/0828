@@ -29,6 +29,10 @@
 #include "storm-watch.h"
 #include "schgm-flash.h"
 
+#ifndef is_flash_active
+#define is_flash_active(chg) 0
+#endif
+
 #define smblib_err(chg, fmt, ...)		\
 	pr_err("%s: %s: " fmt, chg->name,	\
 		__func__, ##__VA_ARGS__)	\
@@ -1539,6 +1543,13 @@ int smblib_set_icl_current(struct smb_charger *chg, int icl_ua)
 
 	if (icl_ua == INT_MAX)
 		goto set_mode;
+
+	if ((chg->typec_mode == POWER_SUPPLY_TYPEC_NONE)
+				&& (chg->real_charger_type >= POWER_SUPPLY_TYPE_USB)) {
+		rc = smblib_set_charge_param(chg, &chg->param.usb_icl, icl_ua);
+		icl_override = SW_OVERRIDE_NO_CC_MODE;
+		goto set_mode;
+	}
 
 	/* configure current */
 	if (chg->real_charger_type == POWER_SUPPLY_TYPE_USB
@@ -6797,9 +6808,12 @@ static void update_sw_icl_max(struct smb_charger *chg, int pst)
 		 * enumeration is done.
 		 */
 		if (!is_client_vote_enabled(chg->usb_icl_votable,
-								USB_PSY_VOTER))
+						USB_PSY_VOTER)) {
+			/* if flash is active force 500mA */
 			vote(chg->usb_icl_votable, USB_PSY_VOTER, true,
-					USBIN_500MA);
+					is_flash_active(chg) ?
+					SDP_CURRENT_UA : USBIN_500MA);
+		}
 		vote(chg->usb_icl_votable, SW_ICL_MAX_VOTER, false, 0);
 		break;
 	case POWER_SUPPLY_TYPE_USB_CDP:

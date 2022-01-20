@@ -154,7 +154,7 @@ struct gadget_config_name {
 };
 
 #define USB_MAX_STRING_WITH_NULL_LEN	(USB_MAX_STRING_LEN+1)
-#define MSOS_VENDOR_TYPE                0x01
+#define MSOS_VENDOR_TYPE 0x01
 
 static int usb_string_copy(const char *s, char **s_copy)
 {

@@ -527,9 +527,6 @@ struct smb_charger {
 	struct power_supply		*ln_psy;
 	struct power_supply		*halo_psy;
 	struct power_supply		*cp_chip_psy;
-#if (defined CONFIG_BATT_VERIFY_BY_DS28E16 || defined CONFIG_BATT_VERIFY_BY_DS28E16_NABU)
-	struct power_supply		*batt_verify_psy;
-#endif
 	enum power_supply_type		real_charger_type;
 	enum power_supply_type          wireless_charger_type;
 
@@ -1036,6 +1033,16 @@ int smblib_get_irq_status(struct smb_charger *chg,
 		union power_supply_propval *val);
 int smblib_get_prop_battery_charging_enabled(struct smb_charger *chg,
 				union power_supply_propval *val);
+int smblib_get_prop_battery_charging_limited(struct smb_charger *chg,
+					union power_supply_propval *val);
+int smblib_get_prop_battery_slowly_charging(struct smb_charger *chg,
+					union power_supply_propval *val);
+int smblib_set_prop_battery_slowly_charging(struct smb_charger *chg,
+					const union power_supply_propval *val);
+int smblib_get_prop_battery_bq_input_suspend(struct smb_charger *chg,
+					union power_supply_propval *val);
+
+int smblib_get_qc3_main_icl_offset(struct smb_charger *chg, int *offset_ua);
 struct usbpd *smb_get_usbpd(void);
 int smblib_init(struct smb_charger *chg);
 int smblib_deinit(struct smb_charger *chg);

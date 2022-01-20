@@ -4540,6 +4540,7 @@ static int fg_parse_esr_cal_params(struct fg_dev *fg)
 #define DEFAULT_CL_MIN_LIM_DECIPERC	0
 #define DEFAULT_CL_MAX_LIM_DECIPERC	0
 #define BTEMP_DELTA_LOW			0
+/* set BTEMP_DELTA_HIGH to 10 to avoid batt-temp-delta irq wakeup frequently */
 #define BTEMP_DELTA_HIGH		10
 #define DEFAULT_ESR_PULSE_THRESH_MA	47
 #define DEFAULT_ESR_MEAS_CURR_MA	120
