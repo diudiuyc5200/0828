@@ -167,7 +167,6 @@ struct usbpd_pm {
 	int	adapter_current;
 	int	adapter_ptf;
 	bool	adapter_omf;
-
 	struct delayed_work pm_work;
 
 	struct notifier_block nb;

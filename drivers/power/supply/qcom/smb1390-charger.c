@@ -752,9 +752,9 @@ static int smb1390_ilim_vote_cb(struct votable *votable, void *data,
 		return -EINVAL;
 	}
 
-	/* ILIM less than 0.75A is not accurate; disable charging */
-	if (ilim_uA < 750000) {
-		pr_info("ILIM %duA is too low to allow charging\n", ilim_uA);
+	/* ILIM less than 1A is not accurate; disable charging */
+	if (ilim_uA < 900000) {
+		pr_debug("ILIM %duA is too low to allow charging\n", ilim_uA);
 		vote(chip->disable_votable, ILIM_VOTER, true, 0);
 		ok_to_dual = false;
 	} else {
@@ -1138,9 +1138,11 @@ static int smb1390_init_hw(struct smb1390 *chip)
 	if (rc < 0)
 		return rc;
 
-	rc = smb1390_masked_write(chip, CORE_FTRIM_CTRL,
-			CFG_TEMP_ALERT_LVL_MASK,
-			TEMP_ALERT_LVL_125C);
+	rc = smb1390_read(chip, 0x1032, &val);
+
+	rc = smb1390_masked_write(chip, 0x1032, 0x0F, 0x07);
+	rc = smb1390_read(chip, 0x1032, &val);
+
 	if (rc < 0)
 		return rc;
 

@@ -473,7 +473,6 @@ static int cp_get_qc_hvdcp3_type(void)
 			POWER_SUPPLY_PROP_HVDCP3_TYPE, &val);
 	if (!ret)
 		pm_state.hvdcp3_type = val.intval;
-
 	return ret;
 }
 
@@ -522,7 +521,6 @@ static int cp_flash2_charge(unsigned int port)
 		return -ADC_ERR;
 	else if (!pm_state.bq2597x.charge_enabled)
 		return -CP_ENABLE_FAIL;
-
 	if (pm_state.bq2597x.vbat_volt > sys_config.bat_volt_lp_lmt - 100 &&
 			pm_state.bq2597x.ibat_curr < sys_config.fc2_taper_current) {
 		if (fc2_taper_timer++ > TAPER_TIMEOUT) {
@@ -789,7 +787,6 @@ static int cp_qc30_notifier_call(struct notifier_block *nb,
 		unsigned long ev, void *v)
 {
 	struct power_supply *psy = v;
-
 	if (ev != PSY_EVENT_PROP_CHANGED)
 		return NOTIFY_OK;
 

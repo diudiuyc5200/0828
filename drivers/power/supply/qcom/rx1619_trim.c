@@ -25,7 +25,6 @@
 #include <linux/ioctl.h>
 #include <asm/uaccess.h>
 
-
 #define rx1619_1_DRIVER_NAME      "rx1619_trim"
 
 static struct rx1619_1_chg *g_chip;
@@ -82,7 +81,6 @@ void rx1619_1_trim(void)
 	printk("--------------rx1619_1_trim--\n");
 }
 
-
 static const struct regmap_config rx1619_1_regmap_config = {
 	.reg_bits = 16,
 	.val_bits = 8,
@@ -110,7 +108,6 @@ static int rx1619_1_probe(struct i2c_client *client, const struct i2c_device_id 
 
 	device_init_wakeup(&client->dev, true);
 	i2c_set_clientdata(client, chip);
-
 
 	g_chip = chip;
 

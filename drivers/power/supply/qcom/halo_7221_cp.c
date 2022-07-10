@@ -625,7 +625,6 @@ static int halo7221_probe(struct i2c_client *client, const struct i2c_device_id 
 	int rc = 0, ret = 0;
 	struct power_supply_config halo_cfg = {};
 
-
 	dev_info(&client->dev, "halo7221 probe!\n");
 
 	chip = devm_kzalloc(&client->dev, sizeof(*chip), GFP_KERNEL);

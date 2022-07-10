@@ -44,7 +44,6 @@
 #define PRIVATE_FAST_CHG_CMD 0x88
 #define PRIVATE_PRODUCT_TEST_CMD 0x8D
 #define PRIVATE_TX_HW_ID_CMD 0x8b
-
 /*adapter type*/
 #define ADAPTER_NONE 0x00
 #define ADAPTER_SDP  0x01
@@ -266,7 +265,6 @@ static int rx1619_read(struct rx1619_chg *chip, u8 *val, u16 addr)
 	rc = regmap_read(chip->regmap, addr, &temp);
 	if (rc >= 0) {
 		*val = (u8)temp;
-
 	}
 
 	return rc;
@@ -280,7 +278,6 @@ static int rx1619_write(struct rx1619_chg *chip, u8 val, u16 addr)
 	rc = regmap_write(chip->regmap, addr, val);
 	if (rc >= 0)
 	{
-
 	}
 
 	return rc;
@@ -597,7 +594,6 @@ static void determine_initial_status(struct rx1619_chg *chip)
 	vout_on = rx1619_is_vout_on(chip);
 	if (vout_on) {
 		g_rx1619_restart_flag = true;
-
 	}
 
 	dev_err(chip->dev, "[%s] initial vout_on = %d \n",
@@ -1361,7 +1357,6 @@ void set_usb_type_current(struct rx1619_chg *chip, u8 data)
 {
 	int i = 0;
 	int uA = 0;
-
 	union power_supply_propval val = {0, };
 
 	dev_info(chip->dev, "[%s] data=0x%x \n", __func__, data);
@@ -1671,7 +1666,6 @@ static void rx_set_charging_param(struct rx1619_chg *chip)
 		if (chip->count_10v > ICL_EXCHANGE_COUNT ||
 				(chip->epp_exchange == EXCHANGE_10V && chip->count_15v <= ICL_EXCHANGE_COUNT)) {
 			dev_info(chip->dev, "iout less than 500mA ,set vin to 12V\n");
-
 			chip->epp_exchange = EXCHANGE_10V;
 		} else if (chip->count_15v > (ICL_EXCHANGE_COUNT))
 			chip->epp_exchange = EXCHANGE_15V;
@@ -1679,7 +1673,6 @@ static void rx_set_charging_param(struct rx1619_chg *chip)
 		switch (chip->status) {
 		case NORMAL_MODE:
 			if (soc >= 97) {
-
 				dev_info(chip->dev, "set curr to %d\n", chip->target_curr);
 			}
 			if (soc >= FULL_SOC) {
@@ -2309,7 +2302,6 @@ static void rx1619_wireless_int_work(struct work_struct *work)
 static irqreturn_t rx1619_chg_stat_handler(int irq, void *dev_id)
 {
 	struct rx1619_chg *chip = dev_id;
-
 
 	dev_info(chip->dev, "[%s]\n", __func__);
 
@@ -3005,7 +2997,6 @@ static int rx1619_wireless_get_property(struct power_supply *psy,
 }
 #endif
 
-
 static const struct regmap_config rx1619_regmap_config = {
 	.reg_bits = 16,
 	.val_bits = 8,
@@ -3038,7 +3029,6 @@ static int rx1619_probe(struct i2c_client *client,const struct i2c_device_id *id
 	int ret = 0;
 	struct rx1619_chg *chip;
 	struct kobject *rx1619_kobj;
-
 
 	struct power_supply_config wip_psy_cfg = {};
 /*
@@ -3155,7 +3145,6 @@ static int rx1619_probe(struct i2c_client *client,const struct i2c_device_id *id
 
 	determine_initial_status(chip);
 
-
 	g_chip = chip;
 
 	if (alarmtimer_get_rtcdev()) {
@@ -3198,7 +3187,6 @@ static int rx1619_remove(struct i2c_client *client)
 
 	return 0;
 }
-
 static const struct i2c_device_id rx1619_id[] = {
 	{rx1619_DRIVER_NAME, 0},
 	{},

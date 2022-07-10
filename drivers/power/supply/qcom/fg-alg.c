@@ -298,7 +298,7 @@ int set_cycle_count(struct cycle_counter *counter, u16 count)
 	return 0;
 }
 
- /**
+/**
  * cycle_count_init -
  * @counter: Cycle counter object
  *
