@@ -402,12 +402,13 @@ enum thermal_status_levels {
 };
 
 enum icl_override_mode {
-	/* APSD/Type-C/QC auto */
-	HW_AUTO_MODE,
-	/* 100/150/500/900mA */
-	SW_OVERRIDE_USB51_MODE,
-	/* ICL other than USB51 */
-	SW_OVERRIDE_HC_MODE,
+    /* APSD/Type-C/QC auto */
+    HW_AUTO_MODE,
+    /* 100/150/500/900mA */
+    SW_OVERRIDE_USB51_MODE,
+    /* ICL other than USB51 */
+    SW_OVERRIDE_HC_MODE,
+    SW_OVERRIDE_NO_CC_MODE,
 };
 
 /* EXTCON_USB and EXTCON_USB_HOST are mutually exclusive */
@@ -1046,4 +1047,10 @@ int smblib_get_qc3_main_icl_offset(struct smb_charger *chg, int *offset_ua);
 struct usbpd *smb_get_usbpd(void);
 int smblib_init(struct smb_charger *chg);
 int smblib_deinit(struct smb_charger *chg);
+int smblib_get_prop_wireless_fw_version(struct smb_charger *chg,
+					union power_supply_propval *val);
+int smblib_set_prop_battery_charging_enabled(struct smb_charger *chg,
+					     const union power_supply_propval *val);
+int smblib_get_prop_battery_charging_enabled(struct smb_charger *chg,
+					     union power_supply_propval *val);
 #endif /* __SMB5_CHARGER_H */
