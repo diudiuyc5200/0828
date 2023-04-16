@@ -55,7 +55,7 @@
 	|| typec_mode == POWER_SUPPLY_TYPEC_SOURCE_HIGH)	\
 	&& !chg->typec_legacy)
 
-bool skip_thermal = false;
+bool skip_thermal = true;
 module_param(skip_thermal, bool, 0644);
 
 static bool off_charge_flag;
