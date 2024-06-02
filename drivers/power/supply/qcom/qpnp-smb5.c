@@ -1789,10 +1789,12 @@ static int smb5_usb_main_get_prop(struct power_supply *psy,
 		val->intval = chg->comp_clamp_level;
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
+#if defined(CONFIG_MACH_XIAOMI_VAYU) || defined(CONFIG_MACH_XIAOMI_NABU)
 		if (chg->use_bq_pump) {
 			rc = val->intval = -ENODATA;
 			break;
 		}
+#endif
 		rc = val->intval = smblib_get_prop_smb_health(chg);
 		break;
 	case POWER_SUPPLY_PROP_HOT_TEMP:
