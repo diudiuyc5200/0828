@@ -36,6 +36,12 @@
 
 #include "dsi_panel_mi.h"
 
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+#include "ss_dsi_panel_common.h"
+#endif
+#ifdef CONFIG_KLAPSE
+#include <linux/klapse.h>
+#endif
 
 /**
  * topology is currently defined by a set of following 3 values:
@@ -917,6 +923,10 @@ int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 	} else {
 		panel->last_bl_lvl = bl_temp;
 	}
+#ifdef CONFIG_KLAPSE
+        set_rgb_slider(bl_lvl);
+#endif
+
 	return rc;
 }
 
