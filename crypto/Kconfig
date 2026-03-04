@@ -1705,6 +1705,11 @@ config CRYPTO_LZ4K_OPLUS
 	select LZ4K_DECOMPRESS
 	help
 	  This is the LZ4K_OPLUS algorithm.
+	tristate "Lz4k_oplus compression algorithm"
+	select CRYPTO_ALGAPI
+	select CRYPTO_ACOMP2
+	help
+	  This is the lz4k_oplus algorithm.
 
 config CRYPTO_LZ4KD
 	tristate "LZ4KD compression algorithm"
@@ -1723,6 +1728,13 @@ config CRYPTO_ZSTD
 	select ZSTD_COMMON
 	help
 	  This is the zstd algorithm.
+
+config CRYPTO_ZSTDN
+	tristate "Zstdn compression algorithm"
+	select CRYPTO_ALGAPI
+	select CRYPTO_ACOMP2
+	help
+	  This is the zstdn algorithm.
 
 comment "Random Number Generation"
 
