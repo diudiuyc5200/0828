@@ -3,7 +3,7 @@ ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
 ifeq ($(CONFIG_MACH_XIAOMI_CEPHEUS),y)
 dtbo-$(CONFIG_ARCH_SM8150) += \
 		cepheus-sm8150-overlay.dtbo
-cepheus-sm8150-overlay.dtbo-base := sm8150-v2.dtb sm8150p-v2.dtb
+cepheus-sm8150-overlay.dtbo-base := sm8150-v2.dtb
 endif
 ifeq ($(CONFIG_MACH_XIAOMI_RAPHAEL),y)
 dtbo-$(CONFIG_ARCH_SM8150) += \
