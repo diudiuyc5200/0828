@@ -123,21 +123,31 @@ int smblib_get_iio_channel(struct smb_charger *chg, const char *propname,
 
 static void smblib_wireless_set_enable(struct smb_charger *chg, int enable)
 {
-	int rc = 0;
-	union power_supply_propval val = {0, };
+    int rc = 0;
+    union power_supply_propval val = {0, };
 
-	chg->idtp_psy = power_supply_get_by_name("idt");
-	if (chg->idtp_psy)
-	{
-		val.intval = enable;
-		rc = power_supply_set_property(chg->idtp_psy, POWER_SUPPLY_PROP_PIN_ENABLED, &val);
-		if (rc < 0) {
-			smblib_err(chg, "Could not set charger control limit =%d\n", rc);
-			return;
-		}
-	}
+    chg->idtp_psy = power_supply_get_by_name("idt");
+    if (chg->idtp_psy) {
+        val.intval = enable;
+        chg->wls_chip_psy = chg->idtp_psy;
+    } else {
+        chg->wip_psy = power_supply_get_by_name("rx1619");
+        if (chg->wip_psy)
+            chg->wls_chip_psy = chg->wip_psy;
+        else
+            return;
+    }
+    
+    if (chg->wls_chip_psy) {
+        val.intval = enable;
+        rc = power_supply_set_property(chg->wls_chip_psy,
+                POWER_SUPPLY_PROP_PIN_ENABLED, &val);
+        if (rc < 0) {
+            smblib_err(chg, "Could not set charger control limit =%d\n", rc);
+            return;
+        }
+    }
 }
-
 #define DIV_FACTOR_MICRO_V_I	1
 #define DIV_FACTOR_MILI_V_I	1000
 #define DIV_FACTOR_DECIDEGC	100
@@ -783,6 +793,29 @@ int smblib_set_usb_suspend(struct smb_charger *chg, bool suspend)
 	return rc;
 }
 
+int smblib_get_fastcharge_mode(struct smb_charger *chg)
+{
+	union power_supply_propval pval = {0,};
+	int rc = 0;
+
+	rc = power_supply_get_property(chg->bms_psy,
+				POWER_SUPPLY_PROP_FASTCHARGE_MODE, &pval);
+	if (rc < 0) {
+		smblib_err(chg, "Couldn't write fastcharge mode:%d\n", rc);
+		return rc;
+	}
+
+	return pval.intval;
+}
+
+int smblib_set_fastcharge_mode(struct smb_charger *chg, bool enable)
+{
+	if (!chg->bms_psy)
+		return 0;
+
+	return 0;
+}
+
 int smblib_set_dc_suspend(struct smb_charger *chg, bool suspend)
 {
 	int rc = 0;
@@ -837,7 +870,8 @@ static int smblib_set_adapter_allowance(struct smb_charger *chg,
 		}
 	}
 
-	rc = smblib_write(chg, USBIN_ADAPTER_ALLOW_CFG_REG, allowed_voltage);
+	rc = smblib_write(chg, USBIN_ADAPTER_ALLOW_CFG_REG,
+			  USBIN_ADAPTER_ALLOW_5V_TO_12V);
 	if (rc < 0) {
 		smblib_err(chg, "Couldn't write 0x%02x to USBIN_ADAPTER_ALLOW_CFG rc=%d\n",
 			allowed_voltage, rc);
@@ -1547,6 +1581,11 @@ static int set_sdp_current(struct smb_charger *chg, int icl_ua)
 	int rc;
 	u8 icl_options;
 	const struct apsd_result *apsd_result = smblib_get_apsd_result(chg);
+
+	if (icl_ua == USBIN_500MA)
+	{
+		icl_ua = USBIN_900MA;
+	}
 
 	/* power source is SDP */
 	switch (icl_ua) {
@@ -5084,6 +5123,29 @@ int smblib_get_prop_smb_health(struct smb_charger *chg)
 	return POWER_SUPPLY_HEALTH_COOL;
 }
 
+int smblib_get_prop_connector_temp(struct smb_charger *chg)
+{
+	int rc;
+
+	rc = smblib_read_iio_channel(chg, chg->iio.connector_temp_chan,
+				DIV_FACTOR_DECIDEGC, &chg->connector_temp);
+	if (rc < 0) {
+		smblib_err(chg, "Couldn't read CONN TEMP channel, rc=%d\n", rc);
+		return rc;
+	}
+
+	return chg->connector_temp;
+}
+
+#define SDP_CURRENT_UA			500000
+#define CDP_CURRENT_UA			1500000
+#define DCP_CURRENT_UA			1600000
+#define HVDCP_CURRENT_UA		2800000
+#define HVDCP_START_CURRENT_UA		1000000
+#define TYPEC_DEFAULT_CURRENT_UA	900000
+#define TYPEC_MEDIUM_CURRENT_UA		1500000
+#define TYPEC_HIGH_CURRENT_UA		3000000
+
 int smblib_get_prop_die_health(struct smb_charger *chg)
 {
 	int rc;
@@ -7104,8 +7166,8 @@ static void update_sw_icl_max(struct smb_charger *chg, int pst)
 		if (!chg->recheck_charger)
 			vote(chg->usb_icl_votable, SW_ICL_MAX_VOTER, true,
 						SDP_100_MA);
-			else
-				vote(chg->usb_icl_votable, SW_ICL_MAX_VOTER, true,
+		else
+			vote(chg->usb_icl_votable, SW_ICL_MAX_VOTER, true,
 						FLOAT_CHARGER_UA);
 		break;
 	case POWER_SUPPLY_TYPE_UNKNOWN:
@@ -9911,3 +9973,68 @@ static int __init early_parse_off_charge_flag(char *p)
 	return 0;
 }
 early_param("androidboot.mode", early_parse_off_charge_flag);
+/*add for wireless reverse charge to disable dc*/
+int smblib_set_sw_disable_dc_en(struct smb_charger *chg,
+				const union power_supply_propval *val)
+{
+	int rc = 0;
+
+	if (val->intval) {
+		smblib_dbg(chg, PR_OEM, "disable dc en by sw\n");
+		/* step1: enter dc suspend */
+		rc = vote(chg->dc_suspend_votable, SW_DISABLE_DC_VOTER,
+			true, 0);
+
+		/* step2: force dcin_en low */
+		rc = smblib_masked_write(chg, DCIN_CMD_IL_REG,
+						 DCIN_EN_OVERRIDE_BIT | DCIN_EN_BIT,
+						 DCIN_EN_OVERRIDE_BIT);
+		if (rc < 0) {
+			dev_err(chg->dev, "Couldn't configure dc_en override rc=%d\n", rc);
+			return rc;
+		}
+
+		/* step3: enable pull-down on dcin_pon and mid_chg */
+		rc = smblib_masked_write(chg, DCIN_CMD_PULLDOWN_REG,
+						 DCIN_PULLDOWN_EN_BIT | DCIN_MID_PULLDOWN_BIT,
+						 DCIN_PULLDOWN_EN_BIT | DCIN_MID_PULLDOWN_BIT);
+		if (rc < 0) {
+			dev_err(chg->dev, "Couldn't enable dcin_pulldown rc=%d\n", rc);
+			return rc;
+		}
+		/* wait 10ms to pull mid_chg lower than Vsys+Vrevi */
+		msleep(10);
+
+		/* step4: exit dc suspend */
+		rc = vote(chg->dc_suspend_votable, SW_DISABLE_DC_VOTER,
+			false, 0);
+	} else {
+		smblib_dbg(chg, PR_OEM, "enable dc en by sw\n");
+		/* step1: enter dc suspend */
+		rc = vote(chg->dc_suspend_votable, SW_DISABLE_DC_VOTER,
+			true, 0);
+
+		/* step2: force dcin_en low */
+		rc = smblib_masked_write(chg, DCIN_CMD_IL_REG,
+						 DCIN_EN_OVERRIDE_BIT, 0);
+		if (rc < 0) {
+			dev_err(chg->dev, "Couldn't configure dc_en override rc=%d\n", rc);
+			return rc;
+		}
+
+		/* step3: enable pull-down on dcin_pon and mid_chg */
+		rc = smblib_masked_write(chg, DCIN_CMD_PULLDOWN_REG,
+						 DCIN_PULLDOWN_EN_BIT | DCIN_MID_PULLDOWN_BIT, 0);
+		if (rc < 0) {
+			dev_err(chg->dev, "Couldn't disable dcin_pulldown rc=%d\n", rc);
+			return rc;
+		}
+		/* wait 10ms to pull mid_chg lower than Vsys+Vrevi */
+		msleep(10);
+		/* step4: exit dc suspend */
+		rc = vote(chg->dc_suspend_votable, SW_DISABLE_DC_VOTER,
+			false, 0);
+	}
+
+	return 0;
+}
