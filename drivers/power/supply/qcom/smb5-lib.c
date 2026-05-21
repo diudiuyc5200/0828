@@ -2794,6 +2794,14 @@ int smblib_get_prop_batt_charge_done(struct smb_charger *chg,
 	return 0;
 }
 
+int smblib_get_prop_battery_charging_enabled(struct smb_charger *chg,
+					union power_supply_propval *val)
+{
+	val->intval = !(get_client_vote(chg->usb_icl_votable, MAIN_CHG_VOTER)
+			== MAIN_CHARGER_ICL);
+	return 0;
+}
+
 int smblib_get_prop_liquid_status(struct smb_charger *chg,
 					union power_supply_propval *val)
 {
@@ -3043,10 +3051,13 @@ static int smblib_dc_therm_charging(struct smb_charger *chg,
 		switch (pval.intval) {
 		case ADAPTER_XIAOMI_QC3:
 		case ADAPTER_ZIMI_CAR_POWER:
+		case ADAPTER_XIAOMI_PD:
+            thermal_icl_ua = chg->thermal_mitigation_dc_20W[temp_level];
+		break;
 		case ADAPTER_XIAOMI_PD_40W:
 		case ADAPTER_XIAOMI_PD_50W:
 		case ADAPTER_XIAOMI_PD_60W:
-		case ADAPTER_VOICE_BOX:
+		case ADAPTER_VOICE_BOX:	
 			thermal_icl_ua = chg->thermal_mitigation_dc[temp_level];
 			break;
 		case ADAPTER_QC2:
@@ -3058,7 +3069,6 @@ static int smblib_dc_therm_charging(struct smb_charger *chg,
 			else
 				thermal_icl_ua = chg->thermal_mitigation_bpp_qc3[temp_level];
 			break;
-		case ADAPTER_XIAOMI_PD:
 		case ADAPTER_PD:
 			if (val.intval == 1)/*is epp*/
 				thermal_icl_ua = chg->thermal_mitigation_epp[temp_level];
@@ -3160,7 +3170,10 @@ static int smblib_therm_charging(struct smb_charger *chg)
 		}
 		break;
 	case POWER_SUPPLY_TYPE_USB_PD:
-		if (chg->cp_reason == POWER_SUPPLY_CP_PPS) {
+		if (chg->cp_reason == POWER_SUPPLY_CP_PPS && !chg->use_bq_pump) {
+			thermal_fcc_ua =
+				chg->thermal_fcc_pps_cp[chg->system_temp_level];
+		} else if (chg->pd_active == POWER_SUPPLY_PD_PPS_ACTIVE) {
 			thermal_fcc_ua =
 				chg->thermal_fcc_pps_cp[chg->system_temp_level];
 		} else {
@@ -3520,6 +3533,11 @@ int smblib_dp_dm(struct smb_charger *chg, int val)
 	int target_icl_ua, rc = 0;
 	union power_supply_propval pval;
 	u8 stat;
+
+	if (chg->use_bq_pump) {
+		pr_info("dp_dm is controled by our self\n");
+		return rc;
+	}
 
 	/* if raise_vbus work is running, ignore dp_dm pulses */
 	if (chg->raise_vbus_to_detect)
@@ -5123,20 +5141,6 @@ int smblib_get_prop_smb_health(struct smb_charger *chg)
 	return POWER_SUPPLY_HEALTH_COOL;
 }
 
-int smblib_get_prop_connector_temp(struct smb_charger *chg)
-{
-	int rc;
-
-	rc = smblib_read_iio_channel(chg, chg->iio.connector_temp_chan,
-				DIV_FACTOR_DECIDEGC, &chg->connector_temp);
-	if (rc < 0) {
-		smblib_err(chg, "Couldn't read CONN TEMP channel, rc=%d\n", rc);
-		return rc;
-	}
-
-	return chg->connector_temp;
-}
-
 #define SDP_CURRENT_UA			500000
 #define CDP_CURRENT_UA			1500000
 #define DCP_CURRENT_UA			1600000
@@ -5288,6 +5292,29 @@ int smblib_get_prop_connector_health(struct smb_charger *chg)
 
 	return POWER_SUPPLY_HEALTH_COOL;
 }
+
+int smblib_get_prop_connector_temp(struct smb_charger *chg)
+{
+	int rc;
+
+	rc = smblib_read_iio_channel(chg, chg->iio.connector_temp_chan,
+				DIV_FACTOR_DECIDEGC, &chg->connector_temp);
+	if (rc < 0) {
+		smblib_err(chg, "Couldn't read CONN TEMP channel, rc=%d\n", rc);
+		return rc;
+	}
+
+	return chg->connector_temp;
+}
+
+#define SDP_CURRENT_UA			500000
+#define CDP_CURRENT_UA			1500000
+#define DCP_CURRENT_UA			1600000
+#define HVDCP_CURRENT_UA		2800000
+#define HVDCP_START_CURRENT_UA		1000000
+#define TYPEC_DEFAULT_CURRENT_UA	900000
+#define TYPEC_MEDIUM_CURRENT_UA		1500000
+#define TYPEC_HIGH_CURRENT_UA		3000000
 
 static int get_rp_based_dcp_current(struct smb_charger *chg, int typec_mode)
 {
@@ -5753,7 +5780,12 @@ int smblib_set_prop_pd_active(struct smb_charger *chg,
 		vote(chg->usb_icl_votable, SW_ICL_MAX_VOTER, false, 0);
 
 		/*set the icl to PD_UNVERIFED_CURRENT when pd is not verifed*/
-		rc = vote(chg->usb_icl_votable, PD_VERIFED_VOTER, true, PD_UNVERIFED_CURRENT);
+				if (!chg->pd_verifed) {
+			rc = vote(chg->fcc_votable, PD_VERIFED_VOTER, true, PD_UNVERIFED_CURRENT);
+			if (rc < 0)
+				smblib_err(chg, "Couldn't unvote PD_VERIFED_VOTER, rc=%d\n", rc);
+		}
+		chg->fake_usb_insertion = false;
 		if (rc < 0)
 			smblib_err(chg, "Couldn't unvote PD_VERIFED_VOTER, rc=%d\n", rc);
 
@@ -6914,11 +6946,13 @@ static void smblib_raise_qc3_vbus_work(struct work_struct *work)
 			vote(chg->usb_icl_votable, SW_ICL_MAX_VOTER, true,
 				HVDCP_CURRENT_UA);
 		/* select charge pump as second charger */
-		rc = smblib_select_sec_charger(chg, POWER_SUPPLY_CHARGER_SEC_CP,
-						POWER_SUPPLY_CP_HVDCP3, false);
-		if (rc < 0)
-				dev_err(chg->dev,
-					"Couldn't enable secondary chargers  rc=%d\n", rc);
+		if (!chg->use_bq_pump) {
+			rc = smblib_select_sec_charger(chg, POWER_SUPPLY_CHARGER_SEC_CP,
+							POWER_SUPPLY_CP_HVDCP3, false);
+			if (rc < 0)
+					dev_err(chg->dev,
+						"Couldn't enable secondary chargers  rc=%d\n", rc);
+		}
 #ifdef CONFIG_THERMAL
 		if (chg->cp_reason == POWER_SUPPLY_CP_HVDCP3)
 			smblib_therm_charging(chg);
@@ -6954,22 +6988,32 @@ int smblib_get_quick_charge_type(struct smb_charger *chg)
 	if (rc < 0)
 		return -EINVAL;
 
-	if (pval.intval == POWER_SUPPLY_STATUS_DISCHARGING)
-		return 0;
+	/* 采用小米的复合断开状态判断 */
+    if (pval.intval == POWER_SUPPLY_STATUS_DISCHARGING ||
+            pval.intval == POWER_SUPPLY_STATUS_NOT_CHARGING)
+        return 0;
 
-	rc = smblib_get_prop_batt_health(chg, &pval);
-	if (rc < 0)
-		smblib_err(chg, "Couldn't get batt health rc=%d\n", rc);
+    /* 保留原厂的安全温控墙：电池低于0度或高于58度时直接拦截，不返回快充类型 */
+    rc = smblib_get_prop_batt_health(chg, &pval);
+    if (rc < 0) {
+        smblib_err(chg, "Couldn't get batt health rc=%d\n", rc);
+    } else if ((pval.intval == POWER_SUPPLY_HEALTH_COLD)
+            || (pval.intval == POWER_SUPPLY_HEALTH_OVERHEAT)) {
+        pr_info("battery temp is under 0 or above 58, disabling quick charge\n");
+        return 0;
+    }
 
-	if ((pval.intval == POWER_SUPPLY_HEALTH_COLD)
-			|| (pval.intval == POWER_SUPPLY_HEALTH_OVERHEAT)){
-		pr_info("battery temp is under 0 or above 58\n");
-		return 0;
-	}
+    /* 保留小米的无线充电发射端（TX）型号获取逻辑 */
+    if (chg->wls_psy)
+        power_supply_get_property(chg->wls_psy,
+                POWER_SUPPLY_PROP_TX_ADAPTER,
+                &pval);
 
-	if ((chg->real_charger_type == POWER_SUPPLY_TYPE_USB_PD) && chg->pd_verifed) {
-		return QUICK_CHARGE_FLASH;
-	}
+    /* 核心：解锁小米 Charge Turbo 极速闪充动画 */
+    if ((chg->real_charger_type == POWER_SUPPLY_TYPE_USB_PD && chg->pd_verifed)
+                        || (pval.intval == ADAPTER_XIAOMI_PD_40W)) {
+        return QUICK_CHARGE_TURBE;
+    }
 
 	if (chg->is_qc_class_b)
 		return QUICK_CHARGE_FLASH;
@@ -7026,7 +7070,8 @@ static void smblib_handle_hvdcp_3p0_auth_done(struct smb_charger *chg,
 	}
 
 	/* for QC3, switch to CP if present */
-	if ((apsd_result->bit & QC_3P0_BIT) && chg->sec_cp_present) {
+	if ((apsd_result->bit & QC_3P0_BIT)
+		&& (chg->sec_cp_present || chg->use_bq_pump)) {
 		if (!chg->qc_class_ab) {
 			rc = smblib_select_sec_charger(chg, POWER_SUPPLY_CHARGER_SEC_CP,
 						POWER_SUPPLY_CP_HVDCP3, false);
@@ -7682,6 +7727,15 @@ static void typec_src_removal(struct smb_charger *chg)
 	pr_err("%s:", __func__);
 	if (chg->pd_verifed)
 		chg->pd_verifed = false;
+		chg->remove_comp = false;
+
+	if (chg->pd_verifed) {
+		chg->pd_verifed = false;
+		if (smblib_get_fastcharge_mode(chg) == true) {
+			chg->last_ffc_remove_time = ktime_get();
+		}
+	}
+	smblib_set_fastcharge_mode(chg, false);	
 }
 
 static void typec_mode_unattached(struct smb_charger *chg)
