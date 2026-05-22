@@ -118,27 +118,35 @@ enum print_reason {
 #define BOOST_BACK_STORM_COUNT	3
 #define WEAK_CHG_STORM_COUNT	8
 
+#define MAX_QC3P5_PLUSE_COUNT_ALLOWED		240
+#define QC3P5_DP_RAPIDLY_TUNE_ALLOWED		130
+#define QC3P5_DP_RAPIDLY_TUNE_PULSE		12
+
 /* defined for distinguish qc class_a and class_b */
 #define VOL_THR_FOR_QC_CLASS_AB		12300000
 #define COMP_FOR_LOW_RESISTANCE_CABLE	100000
 #define QC_CLASS_A_CURRENT_UA		3600000
-#define HVDCP_CLASS_A_MAX_UA		2500000
-#define HVDCP_CLASS_A_FOR_CP_UA		2000000
+#define HVDCP_CLASS_A_MAX_UA		3000000
+#define HVDCP_CLASS_A_FOR_CP_UA		2500000
 #define MAX_PULSE			38
 #define MAX_PLUSE_COUNT_ALLOWED		30
 #define HIGH_NUM_PULSE_THR		12
-#define PD_UNVERIFED_CURRENT		4800000
+#if defined(CONFIG_QPNP_SMB5_NABU)
+#define PD_UNVERIFED_CURRENT           4800000
+#else
+#define PD_UNVERIFED_CURRENT		8500000
+#endif
 #define PD_UNVERIFED_VOLTAGE		4450000
 #define PD_REMOVE_COMP_CURRENT		7000000
 
 /* QC2.0 voltage UV threshold 7.8V */
 #define QC2_HVDCP_VOL_UV_THR		7800000
-#define CHECK_VBUS_WORK_DELAY_MS	100
-#define UNSTANDARD_HVDCP2_UA		1800000
+#define CHECK_VBUS_WORK_DELAY_MS	200
+#define UNSTANDARD_HVDCP2_UA		2200000
 
 #define BAT_TEMP_COLD			0
-#define BAT_TEMP_COOL			150
-#define BAT_TEMP_HOT			450
+#define BAT_TEMP_COOL			120
+#define BAT_TEMP_HOT			470
 #define BAT_TEMP_TOO_HOT		580
 
 #define TEMP_COOL_RECHARGE_VBAT		4300
@@ -149,22 +157,22 @@ enum print_reason {
 /* thermal micros */
 #define MAX_TEMP_LEVEL		16
 /* percent of ICL compared to base 5V for different PD voltage_min voltage */
-#define PD_6P5V_PERCENT		85
-#define PD_7P5V_PERCENT		75
-#define PD_8P5V_PERCENT		70
-#define PD_9V_PERCENT		65
+#define PD_6P5V_PERCENT		95
+#define PD_7P5V_PERCENT		90
+#define PD_8P5V_PERCENT		85
+#define PD_9V_PERCENT		80
 #define PD_MICRO_5V		5000000
 #define PD_MICRO_5P9V	5900000
 #define PD_MICRO_6P5V	6500000
 #define PD_MICRO_7P5V	7500000
 #define PD_MICRO_8P5V	8500000
 #define PD_MICRO_9V		9000000
-#define ICL_LIMIT_LEVEL_THR		8
+#define ICL_LIMIT_LEVEL_THR		10
 
 /* defined for qc2_unsupported */
-#define QC2_UNSUPPORTED_UA		1800000
+#define QC2_UNSUPPORTED_UA		2000000
 /* defined for HVDCP2 */
-#define HVDCP2_CURRENT_UA		1500000
+#define HVDCP2_CURRENT_UA		2500000
 
 /* defined for charger type recheck */
 #define CHARGER_RECHECK_DELAY_MS	30000
@@ -181,6 +189,24 @@ enum print_reason {
 
 #define ADC_CHG_TERM_MASK		32767
 
+#define SDP_100_MA			100000
+#define SDP_CURRENT_UA			500000
+#define CDP_CURRENT_UA			1500000
+#ifdef CONFIG_QPNP_SMB5_NABU
+#define DCP_CURRENT_UA                  2000000
+#endif
+#define HVDCP_CURRENT_UA		3000000
+#define HVDCP_CLASS_B_CURRENT_UA		3500000
+#define HVDCP_START_CURRENT_UA_FOR_BQ	500000
+#define TYPEC_DEFAULT_CURRENT_UA	900000
+#define TYPEC_MEDIUM_CURRENT_UA		1500000
+#define TYPEC_HIGH_CURRENT_UA		3000000
+#define DCIN_ICL_MIN_UA			100000
+#define DCIN_ICL_MAX_UA			1500000
+#define DCIN_ICL_STEP_UA		100000
+#define SLOWLY_CHARGING_CURRENT		1300000
+#define ADC_CHG_TERM_MASK		32767
+#define HVDCP3P5_40W_CURRENT_UA		6000000
 /*DCIN ICL*/
 #define PSNS_CURRENT_SAMPLE_RATE 1053
 #define PSNS_CURRENT_SAMPLE_RESIS 360
@@ -193,12 +219,64 @@ enum print_reason {
 
 #define RECHARGE_SOC_THR		99
 
+
+#define ESR_WORK_VOTER			"ESR_WORK_VOTER"
+#define SLOWLY_CHARGING_VOTER		"SLOWLY_CHARGING_VOTER"
+#define BATT_VERIFY_VOTER		"BATT_VERIFY_VOTER"
+
+/* six pin new battery step charge micros */
+#define MAX_STEP_ENTRIES			3
+#define MAX_COUNT_OF_IBAT_STEP			2
+
+#define STEP_CHG_DELAYED_MONITOR_MS			15000
+#define STEP_CHG_DELAYED_QUICK_MONITOR_MS			5000
+#define STEP_CHG_DELAYED_START_MS			100
+#define VBAT_FOR_STEP_MIN_UV			4300000
+#define VBAT_FOR_STEP_HYS_UV			20000
+
+#define MAIN_ICL_MIN			100000
+#define SIX_PIN_VFLOAT_VOTER		"SIX_PIN_VFLOAT_VOTER"
+#define WARM_VFLOAT_UV			4100000
+
+#define NON_FFC_VFLOAT_VOTER			"NON_FFC_VFLOAT_VOTER"
+#define NON_FFC_VFLOAT_UV			4450000
+
+#define CP_COOL_THRESHOLD		150
+#define CP_WARM_THRESHOLD		450
+#define SOFT_JEITA_HYSTERESIS		5
+
+/* used for bq charge pump solution */
+#define MAIN_CHARGER_ICL	2000000
+#define QC3_CHARGER_ICL		500000
+#define QC3P5_CHARGER_ICL	3000000
+
+#define MAIN_CHARGER_STOP_ICL	50000
+#define ESR_WORK_TIME_2S	2000
+#define ESR_WORK_TIME_180S	180000
+
+/* six pin battery data struct */
+struct six_pin_step_data {
+	u32 vfloat_step_uv;
+	u32 fcc_step_ua;
+};
+
+#define DEFAULT_FFC_LOW_TBAT	150
+#define DEFAULT_FFC_HIGH_TBAT	450
+
+enum esr_work_status {
+	ESR_CHECK_FCC_NOLIMIT,
+	ESR_CHECK_FCC_LIMITED,
+};
+
+#define REPORT_SOC_DECIMAL_MS		100
+
+/* cutoff voltage threshold */
+#define CUTOFF_VOL_THR		3400000
+#define CUTOFF_VOL_HYS		50000
+
 /* wdog bark timer */
 #define BARK_TIMER_LONG		128
 #define BARK_TIMER_NORMAL		16
-
-/* used for bq charge pump solution */
-#define MAIN_CHARGER_ICL			100000
 
 enum hvdcp3_type {
 	HVDCP3_NONE = 0,
