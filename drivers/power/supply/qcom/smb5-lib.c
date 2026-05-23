@@ -746,21 +746,27 @@ int smblib_set_charge_param(struct smb_charger *chg,
 	int rc = 0;
 	u8 val_raw;
 
+	/* * 🌟 修复耳机电流声 Bug: 
+	 * 在任何处理逻辑之前，强制进行全局硬件上下限拦截，
+	 * 防止超限数值（如 50A）进入自定义的 param->set_proc 导致 PMIC 震荡产生电磁干扰。
+	 */
+	if (val_u > param->max_u) {
+		smblib_dbg(chg, PR_MISC, "%s: %d exceeds max_u, clamping to %d\n",
+			param->name, val_u, param->max_u);
+		val_u = param->max_u;
+	}
+	if (val_u < param->min_u) {
+		smblib_dbg(chg, PR_MISC, "%s: %d is below min_u, clamping to %d\n",
+			param->name, val_u, param->min_u);
+		val_u = param->min_u;
+	}
+
 	if (param->set_proc) {
 		rc = param->set_proc(param, val_u, &val_raw);
 		if (rc < 0)
 			return -EINVAL;
 	} else {
-		if (val_u > param->max_u || val_u < param->min_u)
-			smblib_dbg(chg, PR_MISC,
-				"%s: %d is out of range [%d, %d]\n",
-				param->name, val_u, param->min_u, param->max_u);
-
-		if (val_u > param->max_u)
-			val_u = param->max_u;
-		if (val_u < param->min_u)
-			val_u = param->min_u;
-
+		/* 原厂原有的 val_raw 计算逻辑 */
 		val_raw = (val_u - param->min_u) / param->step_u;
 	}
 
