@@ -42,6 +42,26 @@ config THREAD_INFO_IN_TASK
 	  One subtle change that will be needed is to use try_get_task_stack()
 	  and put_task_stack() in save_thread_stack_tsk() and get_wchan().
 
+menu "DroidSpaces Configuration"
+
+config DROIDSPACES
+	bool "add support for Droidspaces. a lightweight, portable Linux containerization."
+	depends on E404_ATTRIBUTES
+	select NAMESPACES
+	select PID_NS
+	select IPC_NS
+	select DEVTMPFS
+	select TMPFS_POSIX_ACL
+	select TMPFS_XATTR
+	select SYSVIPC
+	select POSIX_MQUEUE
+
+	default n
+	help
+		Enabling this config will enable all Kernel configurations for full DroidSpaces support.
+
+endmenu
+
 menu "General setup"
 
 config BROKEN
