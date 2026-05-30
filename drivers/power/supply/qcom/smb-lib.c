@@ -1837,6 +1837,7 @@ int smblib_get_prop_batt_status(struct smb_charger *chg,
 	bool usb_online, dc_online, qnovo_en;
 	u8 stat, pt_en_cmd;
 	int rc;
+	int real_usb_current = 0; // 新增：用于记录实际物理电流
 
 	rc = smblib_get_prop_usb_online(chg, &pval);
 	if (rc < 0) {
@@ -1896,7 +1897,7 @@ int smblib_get_prop_batt_status(struct smb_charger *chg,
 	}
 
 	if (val->intval != POWER_SUPPLY_STATUS_CHARGING)
-		return 0;
+		goto skip_stat7_check; // 如果已经是FULL或者其他状态，跳过下面的物理补丁逻辑
 
 	if (!usb_online && dc_online
 		&& chg->fake_batt_status == POWER_SUPPLY_STATUS_FULL) {
@@ -1926,6 +1927,23 @@ int smblib_get_prop_batt_status(struct smb_charger *chg,
 	/* ignore stat7 when qnovo is enabled */
 	if (!qnovo_en && !stat)
 		val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
+
+skip_stat7_check:
+	/* ==================== 物理补丁核心逻辑 ==================== */
+	/* 即使上面被判定为了 NOT_CHARGING，我们也要用真实的物理输入电流做最终裁决 */
+	if (usb_online && val->intval == POWER_SUPPLY_STATUS_NOT_CHARGING) {
+		pval.intval = 0;
+		rc = smblib_get_prop_usb_current_now(chg, &pval); // 读取实际USB通道电流
+		if (rc >= 0) {
+			real_usb_current = pval.intval;
+			/* 高通读取出来的单位通常是微安(uA)，300000uA = 300mA */
+			if (real_usb_current > 300000) {
+				val->intval = POWER_SUPPLY_STATUS_CHARGING; // 强行扭转为“正在充电”
+				pr_info("smblib-patch: USB current is %duA, forcing status to CHARGING\n", real_usb_current);
+			}
+		}
+	}
+	/* ========================================================= */
 
 	return 0;
 }
