@@ -125,7 +125,6 @@ static inline void pd_phy_close(void)
 }
 #endif
 
-#ifdef CONFIG_MACH_XIAOMI_SM8150
 enum uvdm_state {
 	USBPD_UVDM_DISCONNECT,
 	USBPD_UVDM_CHARGER_VERSION,
@@ -162,7 +161,5 @@ struct usbpd_vdm_data {
 
 #define USBPD_WEAK_PPS_POWER		18000000
 #define USBPD_WAKK_PPS_CURR_LIMIT	1500000
-
-#endif
 
 #endif /* _USBPD_H */
