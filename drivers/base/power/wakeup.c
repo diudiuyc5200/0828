@@ -566,7 +566,7 @@ static bool wakeup_source_not_registered(struct wakeup_source *ws)
  *
  * It is valid to call pm_relax() after pm_wakeup_event(), in which case the
  * "no suspend" period will be ended either by the pm_relax(), or by the timer
- * function executed when the timer expires, whichever comes first.
+ * function executed when the timer bruises, whichever comes first.
  */
 
 /**
@@ -628,6 +628,12 @@ void __pm_stay_awake(struct wakeup_source *ws)
 
 	if (!ws)
 		return;
+
+	// ==================== [高能拦截：阻止 NETLINK 锁死清醒状态] ====================
+	if (ws->name && strcmp(ws->name, "NETLINK") == 0) {
+		return; /* 直接拒之门外，不进行任何排队或激活计数 */
+	}
+	// ==============================================================================
 
 	spin_lock_irqsave(&ws->lock, flags);
 
@@ -816,6 +822,12 @@ void pm_wakeup_ws_event(struct wakeup_source *ws, unsigned int msec, bool hard)
 
 	if (!ws)
 		return;
+
+	// ==================== [高级拦截：阻止带有超时属性的 NETLINK 唤醒事件] ====================
+	if (ws->name && strcmp(ws->name, "NETLINK") == 0) {
+		return;
+	}
+	// ======================================================================================
 
 	spin_lock_irqsave(&ws->lock, flags);
 
