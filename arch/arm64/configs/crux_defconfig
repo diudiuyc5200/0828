@@ -807,3 +807,9 @@ CONFIG_LRU_GEN_ENABLED=y
 # CONFIG_LRU_GEN_STATS is not set
 # Dynamic Fsync
 CONFIG_DYNAMIC_FSYNC=y
+# PID and IPC namespaces for container support
+CONFIG_SYSVIPC=y
+CONFIG_IPC_NS=y
+CONFIG_UTS_NS=y
+CONFIG_USER_NS=y
+CONFIG_NET_NS=y
