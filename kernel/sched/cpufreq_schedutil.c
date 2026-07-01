@@ -1141,4 +1141,15 @@ static int __init sugov_register(void)
 	return cpufreq_register_governor(&schedutil_gov);
 }
 fs_initcall(sugov_register);
+
+#ifndef cpufreq_governor_init
+#define cpufreq_governor_init(__governor) \
+static int __init __governor##_init(void) \
+{ \
+	return cpufreq_register_governor(&__governor); \
+} \
+core_initcall(__governor##_init);
+#endif
+
+/* 完美的、无编译冲突的特性调用 */
 cpufreq_governor_init(schedutil_gov);
