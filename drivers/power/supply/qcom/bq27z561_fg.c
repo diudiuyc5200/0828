@@ -194,6 +194,9 @@ struct bq_fg_chip {
 	int fake_soc;
 	int fake_temp;
 	int fake_volt;
+	/* 新增：charge_full自定义覆盖变量 */
+	int custom_charge_full;
+	bool charge_full_override;
 
 	struct	delayed_work monitor_work;
 	struct power_supply *fg_psy;
@@ -1002,7 +1005,7 @@ static int fg_read_tte(struct bq_fg_chip *bq)
 
 	if (bq->regs[BQ_FG_REG_TTE] == INVALID_REG_ADDR) {
 		bq_dbg(PR_OEM, "Time To Empty not supported!\n");
-		return -EPERM;
+		return -ENODATA;
 	}
 
 	ret = fg_read_word(bq, bq->regs[BQ_FG_REG_TTE], &tte);
@@ -1313,6 +1316,11 @@ static int fg_get_property(struct power_supply *psy, enum power_supply_property 
 		break;
 
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
+	        /* 新增：优先读取自定义容量 */
+	        if (bq->charge_full_override) {
+			val->intval = bq->custom_charge_full;
+			break;
+		}
 		if (bq->old_hw) {
 			val->intval = 4050000;
 			break;
@@ -1439,6 +1447,14 @@ static int fg_set_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 		bq->fake_volt = val->intval;
 		break;
+	/* 新增 charge_full 写入分支 */
+	case POWER_SUPPLY_PROP_CHARGE_FULL:
+		if (val->intval >= 2000000 && val->intval <= 20000000) {
+			bq->custom_charge_full = val->intval;
+			bq->charge_full_override = true;
+			power_supply_changed(bq->fg_psy);
+		}
+		break;	
 	default:
 		return -EINVAL;
 	}
@@ -1460,6 +1476,8 @@ static int fg_prop_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_FASTCHARGE_MODE:
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX:
+	/* 标记charge_full可写 */
+	case POWER_SUPPLY_PROP_CHARGE_FULL:
 		ret = 1;
 		break;
 	default:
@@ -2024,6 +2042,9 @@ static int bq_fg_probe(struct i2c_client *client,
 	bq->fake_soc	= -EINVAL;
 	bq->fake_temp	= -EINVAL;
 	bq->fake_volt	= -EINVAL;
+	/* 自定义容量覆盖变量初始化 */
+	bq->charge_full_override = false;
+	bq->custom_charge_full = 0;
 
 	if (bq->chip == BQ27Z561) {
 		regs = bq27z561_regs;
