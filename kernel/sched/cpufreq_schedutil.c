@@ -382,11 +382,11 @@ static void sugov_update_single(struct update_util_data *hook, u64 time,
 
 	if (flags & SCHED_CPUFREQ_RT_DL) {
 		/* 
-		 * 弹性 RT 提频：
-		 * 使用 policy->cur 作为对比基准是正确的。
-		 * 增加一个简单的检查，防止 policy->cur 为 0 导致逻辑异常。
+		 * 深度优化：拒绝 RT 任务的暴力锁频
+		 * 只有当当前频率过低（低于 60%）时才允许提频到 max。
+		 * 如果已经处于高频段，则维持当前频率，避免电压轨道频繁切换。
 		 */
-		if (policy->cur > 0 && policy->cur < (policy->cpuinfo.max_freq * 3 / 4)) {
+		if (policy->cur < (policy->cpuinfo.max_freq * 3 / 5)) {
 			next_f = policy->cpuinfo.max_freq;
 		} else {
 			next_f = policy->cur;
@@ -416,27 +416,23 @@ static unsigned int sugov_next_freq_shared(struct sugov_cpu *sg_cpu, u64 time)
 	struct cpufreq_policy *policy = sg_policy->policy;
 	unsigned long util = 0, max = 1;
 	unsigned int j;
+	bool rt_boost = false; // 新增标记，用于处理 RT 任务
 
 	for_each_cpu(j, policy->cpus) {
 		struct sugov_cpu *j_sg_cpu = &per_cpu(sugov_cpu, j);
 		unsigned long j_util, j_max;
 		s64 delta_ns;
 
-		/*
-		 * If the CPU utilization was last updated before the previous
-		 * frequency update and the time elapsed between the last update
-		 * of the CPU utilization and the last frequency update is long
-		 * enough, don't take the CPU into account as it probably is
-		 * idle now (and clear iowait_boost for it).
-		 */
 		delta_ns = time - j_sg_cpu->last_update;
 		if (delta_ns > stale_ns) {
 			j_sg_cpu->iowait_boost = 0;
 			j_sg_cpu->iowait_boost_pending = false;
 			continue;
 		}
+
+		/* 标记检测到 RT/DL 任务，但不立即 return */
 		if (j_sg_cpu->flags & SCHED_CPUFREQ_RT_DL)
-			return policy->cpuinfo.max_freq;
+			rt_boost = true;
 
 		j_util = j_sg_cpu->util;
 		j_max = j_sg_cpu->max;
@@ -446,6 +442,17 @@ static unsigned int sugov_next_freq_shared(struct sugov_cpu *sg_cpu, u64 time)
 		}
 
 		sugov_iowait_boost(j_sg_cpu, &util, &max);
+	}
+
+	/* 在循环结束后，统一处理 RT 提频逻辑 */
+	if (rt_boost) {
+		unsigned int threshold = (policy->cpuinfo.max_freq * 3 / 4);
+		if (policy->cur > 0 && policy->cur < threshold) {
+			return policy->cpuinfo.max_freq;
+		} else {
+			// 使用 max_t 明确类型，并确保返回值不低于 policy->min
+			return max_t(unsigned int, policy->cur, policy->min);
+		}
 	}
 
 	return get_next_freq(sg_policy, util, max);
