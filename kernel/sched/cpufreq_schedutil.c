@@ -381,10 +381,18 @@ static void sugov_update_single(struct update_util_data *hook, u64 time,
 	busy = use_pelt() && sugov_cpu_is_busy(sg_cpu);
 
 	if (flags & SCHED_CPUFREQ_RT_DL) {
-		next_f = policy->cpuinfo.max_freq;
+		/* 
+		 * 弹性 RT 提频：
+		 * 使用 policy->cur 作为对比基准是正确的。
+		 * 增加一个简单的检查，防止 policy->cur 为 0 导致逻辑异常。
+		 */
+		if (policy->cur > 0 && policy->cur < (policy->cpuinfo.max_freq * 3 / 4)) {
+			next_f = policy->cpuinfo.max_freq;
+		} else {
+			next_f = policy->cur;
+		}
 	} else {
 		sugov_get_util(&util, &max, sg_cpu->cpu);
-
 		sugov_iowait_boost(sg_cpu, &util, &max);
 		next_f = get_next_freq(sg_policy, util, max);
 		/*
