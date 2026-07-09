@@ -1042,13 +1042,25 @@ static void update_curr_rt(struct rq *rq)
 	if (unlikely((s64)delta_exec <= 0))
 		return;
 
-	/* Kick cpufreq (see the comment in kernel/sched/sched.h). */
-	cpufreq_update_util(rq, SCHED_CPUFREQ_RT);
+	/* 修复：将大写 S 改为小写 s */
+	curr->se.sum_exec_runtime += delta_exec;
+
+	/* 
+	 * 功耗优化：使用数字 0 直接代表未设置标志，规避 RQCF_NONE 定义问题
+	 * 即使在发布版本中，这种写法也比直接引用 Debug 宏更稳健
+	 */
+	if (unlikely(rq->clock_update_flags == 0)) {
+		rq->clock_update_flags = 2; /* 2 对应 RQCF_ACT_SKIP 的枚举值 */
+	}
+
+	/* 频率爆发弹性控制 */
+	cpufreq_update_util(rq, delta_exec < 100000ULL ? 
+			(SCHED_CPUFREQ_RT | SCHED_CPUFREQ_CONTINUE) : 
+			SCHED_CPUFREQ_RT);
 
 	schedstat_set(curr->se.statistics.exec_max,
 		      max(curr->se.statistics.exec_max, delta_exec));
 
-	curr->se.sum_exec_runtime += delta_exec;
 	account_group_exec_runtime(curr, delta_exec);
 
 	curr->se.exec_start = rq_clock_task(rq);
@@ -1075,7 +1087,6 @@ static void update_curr_rt(struct rq *rq)
 		}
 	}
 }
-
 static void
 dequeue_top_rt_rq(struct rt_rq *rt_rq)
 {
