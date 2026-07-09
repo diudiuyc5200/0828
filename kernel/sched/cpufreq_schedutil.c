@@ -168,6 +168,19 @@ static void sugov_update_commit(struct sugov_policy *sg_policy, u64 time,
 	if (sugov_up_down_rate_limit(sg_policy, time, next_freq))
 		return;
 
+	/* 
+	 * 优化：强行打碎高频死锁。
+	 * 如果当前计算出的新频率（next_freq）小于 CPU 目前正在运行的频率（policy->cur），
+	 * 说明任务已经结束或手机准备黑屏。我们直接强制步长拉大，加速 CPU 频率滑落到 300MHz 基础频率，
+	 * 完美根治 1785MHz 频繁卡死的功耗黑洞！
+	 */
+	if (next_freq < policy->cur) {
+		unsigned int diff = policy->cur - next_freq;
+		if (diff < (policy->cpuinfo.max_freq / 4)) {
+			next_freq = (next_freq * 2 + policy->min) / 3;
+		}
+	}
+
 	sg_policy->next_freq = next_freq;
 	sg_policy->last_freq_update_time = time;
 
@@ -217,7 +230,20 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 				policy->cpuinfo.max_freq : policy->cur;
 	unsigned int idx, l_freq, h_freq;
 
-	freq = (freq + (freq >> 2)) * util / max;
+	/* 
+	 * 优化：毛刺负载过滤器（拦截 1785MHz 锁频）
+	 * 从 dmesg 日志来看，系统启动阶段会高频处理大量像 wlan 扫描、电源检测等微小后台中断。
+	 * 如果当前计算出的真实 util 负载还没达到 CPU 总容量的 25% (max / 4)，
+	 * 说明这些全是零碎的中断毛刺或后台偷跑，我们直接强行将频率计算权重砍半 (freq / 2)，
+	 * 从源头上封锁调速器无脑拉高频率的权利。
+	 */
+	if (util < (max / 4)) {
+		freq = (freq / 2) * util / max;
+	} else {
+		/* 负载大于 25% 判定为真正有任务（例如游戏或多开容器），恢复原厂 1.25 倍的高爆响应 */
+		freq = (freq + (freq >> 2)) * util / max;
+	}
+
 	trace_sugov_next_freq(policy->cpu, util, max, freq);
 
 	if (freq == sg_policy->cached_raw_freq && sg_policy->next_freq != UINT_MAX)
