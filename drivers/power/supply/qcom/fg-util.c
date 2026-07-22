@@ -1,5 +1,5 @@
-/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
+/* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -26,25 +26,9 @@
 #define MAX_LINE_LENGTH			(ADDR_LEN + (ITEMS_PER_LINE *	\
 					CHARS_PER_ITEM) + 1)		\
 
+#define VOLTAGE_15BIT_MASK	GENMASK(14, 0)
 #define MAX_READ_TRIES		5
 
-#define VOLTAGE_24BIT_MSB_MASK	GENMASK(27, 16)
-#define VOLTAGE_24BIT_LSB_MASK	GENMASK(11, 0)
-int fg_decode_voltage_24b(struct fg_sram_param *sp,
-	enum fg_sram_param_id id, int value)
-{
-	int msb, lsb, val;
-
-	msb = value & VOLTAGE_24BIT_MSB_MASK;
-	lsb = value & VOLTAGE_24BIT_LSB_MASK;
-	val = (msb >> 4) | lsb;
-	sp[id].value = div_s64((s64)val * sp[id].denmtr, sp[id].numrtr);
-	pr_debug("id: %d raw value: %x decoded value: %x\n", id, value,
-			sp[id].value);
-	return sp[id].value;
-}
-
-#define VOLTAGE_15BIT_MASK	GENMASK(14, 0)
 int fg_decode_voltage_15b(struct fg_sram_param *sp,
 				enum fg_sram_param_id id, int value)
 {
@@ -52,23 +36,6 @@ int fg_decode_voltage_15b(struct fg_sram_param *sp,
 	sp[id].value = div_u64((u64)value * sp[id].denmtr, sp[id].numrtr);
 	pr_debug("id: %d raw value: %x decoded value: %x\n", id, value,
 		sp[id].value);
-	return sp[id].value;
-}
-
-#define CURRENT_24BIT_MSB_MASK	GENMASK(27, 16)
-#define CURRENT_24BIT_LSB_MASK	GENMASK(11, 0)
-int fg_decode_current_24b(struct fg_sram_param *sp,
-	enum fg_sram_param_id id, int value)
-{
-	int msb, lsb, val;
-
-	msb = value & CURRENT_24BIT_MSB_MASK;
-	lsb = value & CURRENT_24BIT_LSB_MASK;
-	val = (msb >> 4) | lsb;
-	val = sign_extend32(val, 23);
-	sp[id].value = div_s64((s64)val * sp[id].denmtr, sp[id].numrtr);
-	pr_debug("id: %d raw value: %x decoded value: %x\n", id, value,
-			sp[id].value);
 	return sp[id].value;
 }
 
@@ -725,7 +692,7 @@ static inline bool is_sec_access(struct fg_dev *fg, int addr)
 	if (fg->version != GEN3_FG)
 		return false;
 
-	return ((addr & 0x00FF) > 0xB8);
+	return ((addr & 0x00FF) > 0xD0);
 }
 
 int fg_write(struct fg_dev *fg, int addr, u8 *val, int len)
@@ -1693,28 +1660,4 @@ int fg_debugfs_create(struct fg_dev *fg)
 err_remove_fs:
 	debugfs_remove_recursive(fg->dfs_root);
 	return -ENOMEM;
-}
-
-void fg_stay_awake(struct fg_dev *fg, int awake_reason)
-{
-	spin_lock(&fg->awake_lock);
-
-	if (!fg->awake_status)
-		pm_stay_awake(fg->dev);
-
-	fg->awake_status |= awake_reason;
-
-	spin_unlock(&fg->awake_lock);
-}
-
-void fg_relax(struct fg_dev *fg, int awake_reason)
-{
-	spin_lock(&fg->awake_lock);
-
-	fg->awake_status &= ~awake_reason;
-
-	if (!fg->awake_status)
-		pm_relax(fg->dev);
-
-	spin_unlock(&fg->awake_lock);
 }

@@ -1,5 +1,5 @@
-/* Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
+/* Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -9,8 +9,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __SMB5_CHARGER_H
@@ -18,15 +16,12 @@
 #include <linux/alarmtimer.h>
 #include <linux/ktime.h>
 #include <linux/types.h>
-#include <linux/timer.h>
 #include <linux/interrupt.h>
 #include <linux/irqreturn.h>
 #include <linux/regulator/driver.h>
 #include <linux/regulator/consumer.h>
 #include <linux/extcon.h>
-#include <linux/usb/class-dual-role.h>
 #include "storm-watch.h"
-#include "battery.h"
 #include <linux/usb/usbpd.h>
 #include <linux/gpio.h>
 #include <linux/gpio/consumer.h>
@@ -100,17 +95,13 @@ enum print_reason {
 #define AICL_THRESHOLD_VOTER		"AICL_THRESHOLD_VOTER"
 #define USBOV_DBC_VOTER			"USBOV_DBC_VOTER"
 #define THERMAL_THROTTLE_VOTER		"THERMAL_THROTTLE_VOTER"
-#define VOUT_VOTER			"VOUT_VOTER"
-#define DR_SWAP_VOTER			"DR_SWAP_VOTER"
 #define USB_SUSPEND_VOTER		"USB_SUSPEND_VOTER"
 #define CHARGER_TYPE_VOTER		"CHARGER_TYPE_VOTER"
 #define HDC_IRQ_VOTER			"HDC_IRQ_VOTER"
+#define VOUT_VOTER			"VOUT_VOTER"
 #define DETACH_DETECT_VOTER		"DETACH_DETECT_VOTER"
 #define CC_MODE_VOTER			"CC_MODE_VOTER"
 #define MAIN_FCC_VOTER			"MAIN_FCC_VOTER"
-#define DCIN_AICL_VOTER			"DCIN_AICL_VOTER"
-#define OVERHEAT_LIMIT_VOTER		"OVERHEAT_LIMIT_VOTER"
-#define GPIO_DCIN_VOTER			"GPIO_DCIN_VOTER"
 
 #define FCC_VOTER			"FCC_VOTER"
 #define ICL_CHANGE_VOTER		"ICL_CHANGE_VOTER"
@@ -118,26 +109,14 @@ enum print_reason {
 #define PD_REMOVE_COMP_VOTER		"PD_REMOVE_COMP_VOTER"
 #define STEP_BMS_CHG_VOTER		"STEP_BMS_CHG_VOTER"
 #define STEP_CHG_VOTER			"STEP_CHG_VOTER"
-#define LOW_ILIM_VOTER			"LOW_ILIM_VOTER"
+
 /* used for bq charge pump solution */
 #define MAIN_CHG_VOTER			"MAIN_CHG_VOTER"
-#define HVDCP3_START_ICL_VOTER	"HVDCP3_START_ICL_VOTER"
-#define MAIN_CHG_SUSPEND_VOTER			"MAIN_CHG_SUSPEND_VOTER"
-/* use for QC3P5 */
-#define QC3P5_VOTER			"QC3P5_VOTER"
-#define FCC_MAX_QC3P5_VOTER		"FCC_MAX_QC3P5_VOTER"
-/* use for Ln8000 */
-#define BATT_LN8000_VOTER		"BATT_LN8000_VOTER"
-#define BATT_BQ2597X_VOTER		"BATT_BQ2597X_VOTER"
 
 #define WLS_FCC_VOTER			"WLS_FCC_VOTER"
 
 #define BOOST_BACK_STORM_COUNT	3
 #define WEAK_CHG_STORM_COUNT	8
-
-#define MAX_QC3P5_PLUSE_COUNT_ALLOWED		230
-#define QC3P5_DP_RAPIDLY_TUNE_ALLOWED		120
-#define QC3P5_DP_RAPIDLY_TUNE_PULSE		10
 
 /* defined for distinguish qc class_a and class_b */
 #define VOL_THR_FOR_QC_CLASS_AB		12300000
@@ -148,17 +127,13 @@ enum print_reason {
 #define MAX_PULSE			38
 #define MAX_PLUSE_COUNT_ALLOWED		30
 #define HIGH_NUM_PULSE_THR		12
-#if defined(CONFIG_QPNP_SMB5_NABU)
-#define PD_UNVERIFED_CURRENT           4800000
-#else
-#define PD_UNVERIFED_CURRENT		3000000
-#endif
+#define PD_UNVERIFED_CURRENT		4800000
 #define PD_UNVERIFED_VOLTAGE		4450000
 #define PD_REMOVE_COMP_CURRENT		7000000
 
 /* QC2.0 voltage UV threshold 7.8V */
 #define QC2_HVDCP_VOL_UV_THR		7800000
-#define CHECK_VBUS_WORK_DELAY_MS	200
+#define CHECK_VBUS_WORK_DELAY_MS	100
 #define UNSTANDARD_HVDCP2_UA		1800000
 
 #define BAT_TEMP_COLD			0
@@ -200,34 +175,15 @@ enum print_reason {
 #define CC_UN_COMPLIANT_START_DELAY_MS	700
 
 #define VBAT_TO_VRAW_ADC(v)		div_u64((u64)v * 1000000UL, 194637UL)
-
 #define ITERM_LIMITS_PMI632_MA		5000
 #define ITERM_LIMITS_PM8150B_MA		10000
 #define ADC_CHG_ITERM_MASK		32767
 
-#define SDP_100_MA			100000
-#define SDP_CURRENT_UA			500000
-#define CDP_CURRENT_UA			1500000
-#ifdef CONFIG_QPNP_SMB5_NABU
-#define DCP_CURRENT_UA			2000000
-#else
-#define DCP_CURRENT_UA                  1600000
-#endif
-#define HVDCP_CURRENT_UA		2800000
-#define HVDCP_CLASS_B_CURRENT_UA		3100000
-#define HVDCP_START_CURRENT_UA_FOR_BQ	500000
-#define TYPEC_DEFAULT_CURRENT_UA	900000
-#define TYPEC_MEDIUM_CURRENT_UA		1500000
-#define TYPEC_HIGH_CURRENT_UA		3000000
-#define DCIN_ICL_MIN_UA			100000
-#define DCIN_ICL_MAX_UA			1500000
-#define DCIN_ICL_STEP_UA		100000
-#define SLOWLY_CHARGING_CURRENT		1000000
 #define ADC_CHG_TERM_MASK		32767
-#define HVDCP3P5_40W_CURRENT_UA		4500000
+
 /*DCIN ICL*/
 #define PSNS_CURRENT_SAMPLE_RATE 1053
-#define PSNS_CURRENT_SAMPLE_RESIS 392
+#define PSNS_CURRENT_SAMPLE_RESIS 360
 #define PSNS_COMP_UV_FOR_HIGH_THERMAL 40000
 
 /* cutoff voltage threshold */
@@ -237,77 +193,18 @@ enum print_reason {
 
 #define RECHARGE_SOC_THR		99
 
-
-#define ESR_WORK_VOTER			"ESR_WORK_VOTER"
-#define SLOWLY_CHARGING_VOTER		"SLOWLY_CHARGING_VOTER"
-#define BATT_VERIFY_VOTER		"BATT_VERIFY_VOTER"
-
-/* six pin new battery step charge micros */
-#define MAX_STEP_ENTRIES			3
-#define MAX_COUNT_OF_IBAT_STEP			2
-
-#define STEP_CHG_DELAYED_MONITOR_MS			15000
-#define STEP_CHG_DELAYED_QUICK_MONITOR_MS			5000
-#define STEP_CHG_DELAYED_START_MS			100
-#define VBAT_FOR_STEP_MIN_UV			4300000
-#define VBAT_FOR_STEP_HYS_UV			20000
-
-#define MAIN_ICL_MIN			100000
-#define SIX_PIN_VFLOAT_VOTER		"SIX_PIN_VFLOAT_VOTER"
-#define WARM_VFLOAT_UV			4100000
-
-#define NON_FFC_VFLOAT_VOTER			"NON_FFC_VFLOAT_VOTER"
-#define NON_FFC_VFLOAT_UV			4450000
-
-#define CP_COOL_THRESHOLD		150
-#define CP_WARM_THRESHOLD		450
-#define SOFT_JEITA_HYSTERESIS		5
-
-/* used for bq charge pump solution */
-#define MAIN_CHARGER_ICL	2000000
-#define QC3_CHARGER_ICL		500000
-#define QC3P5_CHARGER_ICL	2000000
-
-#define MAIN_CHARGER_STOP_ICL	50000
-#define ESR_WORK_TIME_2S	2000
-#define ESR_WORK_TIME_180S	180000
-
-/* six pin battery data struct */
-struct six_pin_step_data {
-	u32 vfloat_step_uv;
-	u32 fcc_step_ua;
-};
-
-#define DEFAULT_FFC_LOW_TBAT	150
-#define DEFAULT_FFC_HIGH_TBAT	450
-
-enum esr_work_status {
-	ESR_CHECK_FCC_NOLIMIT,
-	ESR_CHECK_FCC_LIMITED,
-};
-
-#define REPORT_SOC_DECIMAL_MS		100
-
-/* cutoff voltage threshold */
-#define CUTOFF_VOL_THR		3400000
-#define CUTOFF_VOL_HYS		50000
-
 /* wdog bark timer */
 #define BARK_TIMER_LONG		128
 #define BARK_TIMER_NORMAL		16
 
-/* for override ffc terminate current */
-#define OVERRIDE_FFC_TERM_CURRENT			820
+/* used for bq charge pump solution */
+#define MAIN_CHARGER_ICL			100000
 
 enum hvdcp3_type {
 	HVDCP3_NONE = 0,
 	HVDCP3_CLASSA_18W,
 	HVDCP3_CLASSB_27W,
-	HVDCP3P5_CLASSA_18W,
-	HVDCP3P5_CLASSB_27W,
 };
-
-#define ROLE_REVERSAL_DELAY_MS		2000
 
 enum smb_mode {
 	PARALLEL_MASTER = 0,
@@ -331,11 +228,9 @@ enum qc2_non_comp_voltage {
 enum {
 	BOOST_BACK_WA			= BIT(0),
 	SW_THERM_REGULATION_WA		= BIT(1),
+	CHG_TERMINATION_WA		= BIT(2),
 	WEAK_ADAPTER_WA			= BIT(2),
 	USBIN_OV_WA			= BIT(3),
-	CHG_TERMINATION_WA		= BIT(4),
-	USBIN_ADC_WA			= BIT(5),
-	SKIP_MISC_PBS_IRQ_WA		= BIT(6),
 };
 
 enum jeita_cfg_stat {
@@ -513,8 +408,6 @@ enum icl_override_mode {
 	SW_OVERRIDE_USB51_MODE,
 	/* ICL other than USB51 */
 	SW_OVERRIDE_HC_MODE,
-	/* ICL in cc float mode */
-	SW_OVERRIDE_NO_CC_MODE,
 };
 
 /* EXTCON_USB and EXTCON_USB_HOST are mutually exclusive */
@@ -605,23 +498,17 @@ struct smb_charger {
 	int			*pd_disabled;
 	enum smb_mode		mode;
 	struct smb_chg_freq	chg_freq;
+	int			smb_version;
 	int			otg_delay_ms;
 	int			*weak_chg_icl_ua;
 	bool			pd_not_supported;
 	bool			init_once;
 	bool			support_liquid;
-	bool			dynamic_fv_enabled;
-	bool			batt_verified;
 
 	/* locks */
 	struct mutex		smb_lock;
 	struct mutex		ps_change_lock;
-	struct mutex		dr_lock;
 	struct mutex		irq_status_lock;
-	struct mutex		adc_lock;
-	spinlock_t		typec_pr_lock;
-	struct mutex		dcin_aicl_lock;
-	struct mutex		dpdm_lock;
 
 	/* power supplies */
 	struct power_supply		*batt_psy;
@@ -643,9 +530,6 @@ struct smb_charger {
 	enum power_supply_type		real_charger_type;
 	enum power_supply_type          wireless_charger_type;
 
-	/* dual role class */
-	struct dual_role_phy_instance	*dual_role;
-
 	/* notifiers */
 	struct notifier_block	nb;
 
@@ -654,7 +538,6 @@ struct smb_charger {
 
 	/* CC Mode */
 	int	adapter_cc_mode;
-	int	thermal_overheat;
 
 	/* regulators */
 	struct smb_regulator	*vbus_vreg;
@@ -677,8 +560,8 @@ struct smb_charger {
 	struct votable		*icl_irq_disable_votable;
 	struct votable		*limited_irq_disable_votable;
 	struct votable		*hdc_irq_disable_votable;
+
 	struct votable          *cp_ilim_votable;
-	struct votable		*temp_change_irq_disable_votable;
 
 	/* work */
 	struct work_struct	bms_update_work;
@@ -686,7 +569,6 @@ struct smb_charger {
 	struct work_struct	jeita_update_work;
 	struct work_struct	moisture_protection_work;
 	struct work_struct	chg_termination_work;
-	struct work_struct	dcin_aicl_work;
 	struct work_struct	lpd_disable_chg_work;
 	struct delayed_work	ps_change_timeout_work;
 	struct delayed_work	clear_hdc_work;
@@ -694,7 +576,6 @@ struct smb_charger {
 	struct delayed_work	pl_enable_work;
 	struct delayed_work	uusb_otg_work;
 	struct delayed_work	bb_removal_work;
-	struct delayed_work	batt_verify_update_work;
 	struct delayed_work	raise_qc3_vbus_work;
 	struct delayed_work	lpd_ra_open_work;
 	struct delayed_work	lpd_detach_work;
@@ -706,28 +587,14 @@ struct smb_charger {
 	struct delayed_work	after_ffc_chg_dis_work;
 	struct delayed_work	after_ffc_chg_en_work;
 	struct delayed_work	dc_plug_out_delay_work;
-	struct delayed_work	report_soc_decimal_work;
 	struct delayed_work	usbov_dbc_work;
-	struct delayed_work	role_reversal_check;
 	struct delayed_work	pr_swap_detach_work;
-	struct delayed_work	pr_lock_clear_work;
-	struct delayed_work	micro_usb_switch_work;
-
 	struct delayed_work	check_vbus_work;
-	struct delayed_work     check_init_boot;
 	struct delayed_work	early_attach;
-	struct delayed_work	six_pin_batt_step_chg_work;
-	struct delayed_work	reduce_fcc_work;
-	struct delayed_work	thermal_setting_work;
-	struct delayed_work	check_vbat_work;
 	struct alarm		lpd_recheck_timer;
 	struct alarm		moisture_protection_alarm;
 	struct alarm		chg_termination_alarm;
-	struct alarm		dcin_aicl_alarm;
 
-	struct timer_list	apsd_timer;
-
-	struct charger_param	chg_param;
 	/* secondary charger config */
 	bool			sec_pl_present;
 	bool			sec_cp_present;
@@ -741,24 +608,19 @@ struct smb_charger {
 	int			voltage_min_uv;
 	int			voltage_max_uv;
 	int			pd_active;
-	int			apdo_max;
 	int			pd_verifed;
 	bool			pd_hard_reset;
-	bool			pr_lock_in_progress;
 	bool			pr_swap_in_progress;
 	bool			early_usb_attach;
 	bool			early_dc_attach;
 	bool			batt_temp_irq_enabled;
 	bool			ok_to_pd;
 	bool			typec_legacy;
-	bool			typec_irq_en;
-	bool			typec_role_swap_failed;
 
 	/* cached status */
 	bool			system_suspend_supported;
 	int			boost_threshold_ua;
 	int			system_temp_level;
-	int			pps_thermal_level;
 	int			thermal_levels;
 	int			lpd_levels;
 	int			dc_temp_level;
@@ -773,7 +635,6 @@ struct smb_charger {
 	int 		*thermal_fcc_qc3_classb_cp;
 	int 		*thermal_fcc_pps_cp;
 	int 		*thermal_mitigation_dc;
-	int		*thermal_mitigation_voice;
 	int 		*lpd_hwversion;
 	int 		*thermal_mitigation_epp;
 	int 		*thermal_mitigation_bpp_qc3;
@@ -789,14 +650,12 @@ struct smb_charger {
 	int			fake_conn_temp;
 	bool			step_chg_enabled;
 	bool			sw_jeita_enabled;
-	bool			typec_legacy_use_rp_icl;
 	bool			lpd_enabled;
 	bool			is_hdc;
 	bool			chg_done;
 	int			connector_type;
 	bool			otg_en;
 	bool			suspend_input_on_debug_batt;
-	bool			fake_chg_status_on_debug_batt;
 	int			default_icl_ua;
 	int			otg_cl_ua;
 	bool			uusb_apsd_rerun_done;
@@ -814,7 +673,6 @@ struct smb_charger {
 	int			auto_recharge_soc;
 	int			auto_recharge_vbat;
 	enum sink_src_mode	sink_src_mode;
-	enum power_supply_typec_power_role power_role;
 	enum jeita_cfg_stat	jeita_configured;
 	int			charger_temp_max;
 	int			smb_temp_max;
@@ -838,38 +696,26 @@ struct smb_charger {
 	int			jeita_soft_fv[2];
 	bool			moisture_present;
 	bool			uusb_moisture_protection_enabled;
+	int			charge_full_cc;
+	int			cc_soc_ref;
 	bool			hw_die_temp_mitigation;
 	bool			hw_connector_mitigation;
 	bool			hw_skin_temp_mitigation;
-	bool			en_skin_therm_mitigation;
 	int			connector_pull_up;
-	int			smb_pull_up;
 	int			aicl_5v_threshold_mv;
 	int			default_aicl_5v_threshold_mv;
 	int			aicl_cont_threshold_mv;
 	int			default_aicl_cont_threshold_mv;
 	bool			aicl_max_reached;
-	int			charge_full_cc;
-	int			cc_soc_ref;
 	int			last_cc_soc;
-	int			dr_mode;
-	int			term_vbat_uv;
 	int			usbin_forced_max_uv;
 	int			init_thermal_ua;
-	u32			comp_clamp_level;
-	bool			hvdcp3_standalone_config;
-	int			wls_icl_ua;
-	bool			dpdm_enabled;
-	bool			apsd_ext_timeout;
-	bool			qc3p5_detected;
+	u32                     comp_clamp_level;
 	int			vbus_disable;
-	bool			en_bq_flag;
 	int64_t			rpp;
 	int64_t			cep;
 	int64_t			tx_bt_mac;
-	int64_t			pen_bt_mac;
 	int			reverse_chg_state;
-	int			reverse_gpio_state;
 
 	/* workaround flag */
 	u32			wa_flags;
@@ -911,22 +757,8 @@ struct smb_charger {
 	u32			irq_status;
 
 	/* wireless */
-	int			dcin_uv_count;
-	ktime_t			dcin_uv_last_time;
-	int			last_wls_vout;
-	/* GPIO DCIN Supply */
-	int			micro_usb_gpio;
-	int			micro_usb_irq;
-	int			dc_9v_gpio;
-	int			dc_9v_irq;
-	int			usb_switch_gpio;
-	int			usb_hub_33v_en_gpio;
-	int			micro_usb_pre_state;
-	bool			dcin_uusb_over_gpio_en;
-	bool			aicl_disable;
 	int			wireless_vout;
 	int			flag_dc_present;
-	int			flag_cp_en;
 	int			power_good_en;
 	int			fake_dc_on;
 	int			fake_dc_flag;
@@ -939,7 +771,6 @@ struct smb_charger {
 	bool			cc_un_compliant_detected;
 	bool			snk_debug_acc_detected;
 	bool			support_wireless;
-	bool			wireless_bq;
 	bool			support_conn_therm;
 	bool			ext_fg;
 	int			conn_detect_count;
@@ -950,46 +781,6 @@ struct smb_charger {
 	/* used for bq charge pump solution */
 	struct usbpd		*pd;
 	bool			use_bq_pump;
-
-	/* reduce fcc for esr cal*/
-	int			esr_work_status;
-	bool			cp_charge_enabled;
-	int			charge_type;
-	int			charge_status;
-	int			batt_health;
-
-	bool			override_ffc_term_current;
-	/* for 27W charge*/
-	bool			temp_27W_enable;
-
-	/* used for 6pin new battery step charge */
-	bool			six_pin_step_charge_enable;
-	bool			init_start_vbat_checked;
-	struct six_pin_step_data			six_pin_step_cfg[MAX_STEP_ENTRIES];
-	u32			start_step_vbat;
-	int			trigger_taper_count;
-	int			index_vfloat;
-
-	/* fast full charge related */
-	int			chg_term_current_thresh_hi_from_dts;
-	bool			support_ffc;
-	int			ffc_low_tbat;
-	int			ffc_high_tbat;
-	bool			slowly_charging;
-	bool			already_start_step_charge_work;
-	bool			bq_input_suspend;
-
-	bool			hvdcp_recheck_status;
-
-	/* QC3P5 related */
-	bool			qc3p5_supported;
-	bool			qc3p5_auth_complete;
-	bool			qc3p5_authenticated;
-	bool			qc3p5_authentication_started;
-	bool			qc3p5_dp_tune_rapidly;
-	int 			qc3p5_power_limit_w;
-
-	bool			pps_fcc_therm_work_disabled;
 	int			wls_cp_vin;
 	int64_t oob_rpp_msg_cnt;
 	int64_t oob_cep_msg_cnt;
@@ -1035,7 +826,6 @@ int smblib_vconn_regulator_is_enabled(struct regulator_dev *rdev);
 
 irqreturn_t default_irq_handler(int irq, void *data);
 irqreturn_t dcin_uv_handler(int irq, void *data);
-irqreturn_t smb_en_irq_handler(int irq, void *data);
 irqreturn_t chg_state_change_irq_handler(int irq, void *data);
 irqreturn_t batt_temp_changed_irq_handler(int irq, void *data);
 irqreturn_t batt_psy_changed_irq_handler(int irq, void *data);
@@ -1045,7 +835,6 @@ irqreturn_t usb_source_change_irq_handler(int irq, void *data);
 irqreturn_t icl_change_irq_handler(int irq, void *data);
 irqreturn_t typec_state_change_irq_handler(int irq, void *data);
 irqreturn_t typec_attach_detach_irq_handler(int irq, void *data);
-irqreturn_t dcin_uv_irq_handler(int irq, void *data);
 irqreturn_t dc_plugin_irq_handler(int irq, void *data);
 irqreturn_t high_duty_cycle_irq_handler(int irq, void *data);
 irqreturn_t switcher_power_ok_irq_handler(int irq, void *data);
@@ -1055,14 +844,12 @@ irqreturn_t typec_or_rid_detection_change_irq_handler(int irq, void *data);
 irqreturn_t temp_change_irq_handler(int irq, void *data);
 irqreturn_t usbin_ov_irq_handler(int irq, void *data);
 irqreturn_t sdam_sts_change_irq_handler(int irq, void *data);
-irqreturn_t smb_micro_usb_irq_handler(int irq, void *data);
+
 int smblib_get_prop_input_suspend(struct smb_charger *chg,
 				union power_supply_propval *val);
 int smblib_get_prop_batt_present(struct smb_charger *chg,
 				union power_supply_propval *val);
 int smblib_get_prop_batt_capacity(struct smb_charger *chg,
-				union power_supply_propval *val);
-int smblib_get_prop_batt_capacity_level(struct smb_charger *chg,
 				union power_supply_propval *val);
 int smblib_get_prop_batt_status(struct smb_charger *chg,
 				union power_supply_propval *val);
@@ -1149,20 +936,14 @@ int smblib_get_pe_start(struct smb_charger *chg,
 int smblib_get_prop_charger_temp(struct smb_charger *chg,
 				union power_supply_propval *val);
 int smblib_get_prop_die_health(struct smb_charger *chg);
-int smblib_get_prop_smb_health(struct smb_charger *chg);
 int smblib_get_prop_connector_health(struct smb_charger *chg);
-int smblib_get_prop_input_current_max(struct smb_charger *chg,
-				  union power_supply_propval *val);
-int smblib_set_prop_thermal_overheat(struct smb_charger *chg,
-			       int therm_overheat);
 int smblib_get_prop_vph_voltage_now(struct smb_charger *chg,
 				union power_supply_propval *val);
 int smblib_get_prop_connector_temp(struct smb_charger *chg);
 int smblib_set_vbus_disable(struct smb_charger *chg,
 					bool disable);
-int smblib_get_skin_temp_status(struct smb_charger *chg);
 int smblib_get_prop_vph_voltage_now(struct smb_charger *chg,
-				union power_supply_propval *val);
+		union power_supply_propval *val);
 int smblib_set_prop_pd_current_max(struct smb_charger *chg,
 				const union power_supply_propval *val);
 int smblib_set_prop_sdp_current_max(struct smb_charger *chg,
@@ -1187,7 +968,6 @@ int smblib_set_prop_rechg_vbat_thresh(struct smb_charger *chg,
 				const union power_supply_propval *val);
 void smblib_suspend_on_debug_battery(struct smb_charger *chg);
 int smblib_rerun_apsd_if_required(struct smb_charger *chg);
-void smblib_rerun_apsd(struct smb_charger *chg);
 int smblib_get_prop_fcc_delta(struct smb_charger *chg,
 				union power_supply_propval *val);
 int smblib_get_thermal_threshold(struct smb_charger *chg, u16 addr, int *val);
@@ -1205,7 +985,6 @@ int smblib_get_prop_pr_swap_in_progress(struct smb_charger *chg,
 				union power_supply_propval *val);
 int smblib_set_prop_pr_swap_in_progress(struct smb_charger *chg,
 				const union power_supply_propval *val);
-int smblib_force_dr_mode(struct smb_charger *chg, int mode);
 int smblib_get_prop_from_bms(struct smb_charger *chg,
 				enum power_supply_property psp,
 				union power_supply_propval *val);
@@ -1237,8 +1016,6 @@ int smblib_get_prop_liquid_status(struct smb_charger *chg,
 					union power_supply_propval *val);
 int smblib_set_prop_tx_mac(struct smb_charger *chg,
 				const union power_supply_propval *val);
-void smblib_set_prop_pen_mac(struct smb_charger *chg,
-				const union power_supply_propval *val);
 int smblib_set_prop_rx_cr(struct smb_charger *chg,
 				const union power_supply_propval *val);
 int smblib_set_prop_rx_cep(struct smb_charger *chg,
@@ -1248,38 +1025,15 @@ int smblib_set_prop_bt_state(struct smb_charger *chg,
 
 bool smblib_support_liquid_feature(struct smb_charger *chg);
 
-int smblib_set_prop_battery_charging_enabled(struct smb_charger *chg,
-				const union power_supply_propval *val);
 int smblib_toggle_smb_en(struct smb_charger *chg, int toggle);
 void smblib_hvdcp_detect_enable(struct smb_charger *chg, bool enable);
 void smblib_hvdcp_exit_config(struct smb_charger *chg);
 void smblib_apsd_enable(struct smb_charger *chg, bool enable);
-int smblib_force_vbus_voltage(struct smb_charger *chg, u8 val);
 int smblib_get_irq_status(struct smb_charger *chg,
 		union power_supply_propval *val);
-#ifdef CONFIG_QPNP_SMB5_NABU
-int smb5_config_iterm(struct smb_charger *chg, int hi_thresh, int low_thresh);
-#endif
 int smblib_get_prop_battery_charging_enabled(struct smb_charger *chg,
 				union power_supply_propval *val);
-int smblib_get_prop_battery_charging_limited(struct smb_charger *chg,
-					union power_supply_propval *val);
-int smblib_get_prop_battery_slowly_charging(struct smb_charger *chg,
-					union power_supply_propval *val);
-int smblib_set_prop_battery_slowly_charging(struct smb_charger *chg,
-					const union power_supply_propval *val);
-int smblib_get_prop_battery_bq_input_suspend(struct smb_charger *chg,
-					union power_supply_propval *val);
-
-int smblib_get_qc3_main_icl_offset(struct smb_charger *chg, int *offset_ua);
 struct usbpd *smb_get_usbpd(void);
-
 int smblib_init(struct smb_charger *chg);
 int smblib_deinit(struct smb_charger *chg);
-int smblib_get_prop_wireless_fw_version(struct smb_charger *chg,
-					union power_supply_propval *val);
-int smblib_set_prop_battery_charging_enabled(struct smb_charger *chg,
-					     const union power_supply_propval *val);
-int smblib_get_prop_battery_charging_enabled(struct smb_charger *chg,
-					     union power_supply_propval *val);
 #endif /* __SMB5_CHARGER_H */

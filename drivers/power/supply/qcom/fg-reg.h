@@ -1,4 +1,5 @@
-/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -41,8 +42,6 @@
 #define BATT_THERM_PULL_UP_400K			3
 #define BATT_THERM_PULL_UP_MASK			GENMASK(1, 0)
 
-#define ADC_RR_BATT_THERM_FREQ(chip)		(chip->rradc_base + 0x82)
-
 #define ADC_RR_BATT_TEMP_LSB(chip)		(chip->rradc_base + 0x88)
 #define ADC_RR_BATT_TEMP_MSB(chip)		(chip->rradc_base + 0x89)
 #define GEN4_BATT_TEMP_MSB_MASK			GENMASK(1, 0)
@@ -53,7 +52,6 @@
 #define BATT_SOC_SLEEP_SHUTDOWN_STS(chip)	(chip->batt_soc_base + 0x08)
 #define BATT_SOC_FG_MONOTONIC_SOC(chip)		(chip->batt_soc_base + 0x09)
 #define BATT_SOC_FG_MONOTONIC_SOC_CP(chip)	(chip->batt_soc_base + 0x0A)
-#define BATT_SOC_RST_CTRL0(chip)		(chip->batt_soc_base + 0xBA)
 
 #define BATT_SOC_INT_RT_STS(chip)		(chip->batt_soc_base + 0x10)
 #define SOC_READY_BIT				BIT(1)
@@ -68,10 +66,6 @@
 #define BATT_SOC_STS_CLR(chip)			(chip->batt_soc_base + 0x4A)
 #define BATT_SOC_LOW_PWR_CFG(chip)		(chip->batt_soc_base + 0x52)
 #define BATT_SOC_LOW_PWR_STS(chip)		(chip->batt_soc_base + 0x56)
-/* BATT_SOC_RST_CTRL0 */
-#define BCL_RST_BIT				BIT(2)
-#define MEM_RST_BIT				BIT(1)
-#define ALG_RST_BIT				BIT(0)
 
 /* FG_BATT_INFO register definitions */
 #define BATT_INFO_BATT_TEMP_STS(chip)		(chip->batt_info_base + 0x06)

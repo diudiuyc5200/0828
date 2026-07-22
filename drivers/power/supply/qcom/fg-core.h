@@ -1,5 +1,5 @@
-/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
+/* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,7 +14,6 @@
 #ifndef __FG_CORE_H__
 #define __FG_CORE_H__
 
-#include <linux/alarmtimer.h>
 #include <linux/atomic.h>
 #include <linux/bitops.h>
 #include <linux/debugfs.h>
@@ -25,11 +24,9 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
-#include <linux/alarmtimer.h>
 #include <linux/power_supply.h>
 #include <linux/regmap.h>
 #include <linux/slab.h>
-#include <linux/spinlock.h>
 #include <linux/string_helpers.h>
 #include <linux/types.h>
 #include <linux/uaccess.h>
@@ -68,7 +65,6 @@
 #define PROFILE_LOAD		"fg_profile_load"
 #define TTF_PRIMING		"fg_ttf_priming"
 #define ESR_CALIB		"fg_esr_calib"
-#define FG_ESR_VOTER		"fg_esr_voter"
 
 /* Delta BSOC irq votable reasons */
 #define DELTA_BSOC_IRQ_VOTER	"fg_delta_bsoc_irq"
@@ -84,8 +80,6 @@
 #define FG_PARALLEL_EN_VOTER	"fg_parallel_en"
 #define MEM_ATTN_IRQ_VOTER	"fg_mem_attn_irq"
 
-#define DEBUG_BOARD_VOTER	"fg_debug_board"
-
 #define BUCKET_COUNT			8
 #define BUCKET_SOC_PCT			(256 / BUCKET_COUNT)
 
@@ -100,7 +94,7 @@
 #define ESR_SOH_SOC			50
 #define EMPTY_SOC			0
 
-#define VBAT_RESTART_FG_EMPTY_UV		3700000
+#define VBAT_RESTART_FG_EMPTY_UV		3600000
 #define TEMP_THR_RESTART_FG		150
 #define RESTART_FG_START_WORK_MS		1000
 #define RESTART_FG_WORK_MS		2000
@@ -127,12 +121,6 @@ enum fg_debug_flag {
 	FG_BUS_READ		= BIT(6), /* Show REGMAP reads */
 	FG_CAP_LEARN		= BIT(7), /* Show capacity learning */
 	FG_TTF			= BIT(8), /* Show time to full */
-	FG_FVSS			= BIT(9), /* Show FVSS */
-};
-
-enum awake_reasons {
-	FG_SW_ESR_WAKE = BIT(0),
-	FG_STATUS_NOTIFY_WAKE = BIT(1),
 };
 
 /* SRAM access */
@@ -197,11 +185,8 @@ enum fg_sram_param_id {
 	FG_SRAM_MONOTONIC_SOC,
 	FG_SRAM_VOLTAGE_PRED,
 	FG_SRAM_OCV,
-	FG_SRAM_VBAT_FLT,
-	FG_SRAM_VBAT_TAU,
 	FG_SRAM_VBAT_FINAL,
 	FG_SRAM_IBAT_FINAL,
-	FG_SRAM_IBAT_FLT,
 	FG_SRAM_ESR,
 	FG_SRAM_ESR_MDL,
 	FG_SRAM_ESR_ACT,
@@ -229,20 +214,14 @@ enum fg_sram_param_id {
 	FG_SRAM_DELTA_MSOC_THR,
 	FG_SRAM_DELTA_BSOC_THR,
 	FG_SRAM_RECHARGE_SOC_THR,
-	FG_SRAM_SYNC_SLEEP_THR,
 	FG_SRAM_RECHARGE_VBATT_THR,
 	FG_SRAM_KI_COEFF_LOW_DISCHG,
 	FG_SRAM_KI_COEFF_MED_DISCHG,
 	FG_SRAM_KI_COEFF_HI_DISCHG,
-	FG_SRAM_KI_COEFF_LO_MED_DCHG_THR,
-	FG_SRAM_KI_COEFF_MED_HI_DCHG_THR,
 	FG_SRAM_KI_COEFF_LOW_CHG,
 	FG_SRAM_KI_COEFF_MED_CHG,
 	FG_SRAM_KI_COEFF_HI_CHG,
-	FG_SRAM_KI_COEFF_LO_MED_CHG_THR,
-	FG_SRAM_KI_COEFF_MED_HI_CHG_THR,
 	FG_SRAM_KI_COEFF_FULL_SOC,
-	FG_SRAM_KI_COEFF_CUTOFF,
 	FG_SRAM_ESR_TIGHT_FILTER,
 	FG_SRAM_ESR_BROAD_FILTER,
 	FG_SRAM_SLOPE_LIMIT,
@@ -320,12 +299,6 @@ enum slope_limit_status {
 	SLOPE_LIMIT_NUM_COEFFS,
 };
 
-enum esr_filter_status {
-	ROOM_TEMP = 1,
-	LOW_TEMP,
-	RELAX_TEMP,
-};
-
 enum esr_timer_config {
 	TIMER_RETRY = 0,
 	TIMER_MAX,
@@ -343,7 +316,6 @@ struct fg_batt_props {
 	char		*batt_profile;
 	int		float_volt_uv;
 	int		vbatt_full_mv;
-	int		ffc_vbatt_full_mv;
 	int		fastchg_curr_ma;
 	int		nom_cap_uah;
 	int		*therm_coeffs;
@@ -351,9 +323,6 @@ struct fg_batt_props {
 	int		therm_pull_up_kohms;
 	int		*rslow_normal_coeffs;
 	int		*rslow_low_coeffs;
-	int		ffc_term_curr_ma;
-	int		ffc_low_temp_term_curr_ma;
-	int		ffc_high_temp_term_curr_ma;
 };
 
 struct fg_cyc_ctr_data {
@@ -361,7 +330,7 @@ struct fg_cyc_ctr_data {
 	bool		started[BUCKET_COUNT];
 	u16		count[BUCKET_COUNT];
 	u8		last_soc[BUCKET_COUNT];
-	char		counter[BUCKET_COUNT * 8];
+	int		id;
 	struct mutex	lock;
 };
 
@@ -460,15 +429,7 @@ struct fg_memif {
 	u8			num_bytes_per_word;
 };
 
-struct cold_thermal {
-	int index;
-	int temp_l;
-	int temp_h;
-	int curr_th;
-};
-
 struct fg_dev {
-	struct thermal_zone_device	*tz_dev;
 	struct device		*dev;
 	struct pmic_revid_data	*pmic_rev_id;
 	struct regmap		*regmap;
@@ -489,22 +450,15 @@ struct fg_dev {
 	int			*debug_mask;
 	struct fg_batt_props	bp;
 	struct notifier_block	nb;
-	struct alarm            esr_sw_timer;
-	struct notifier_block	twm_nb;
 	struct mutex		bus_lock;
 	struct mutex		sram_rw_lock;
 	struct mutex		charge_full_lock;
 	struct mutex		qnovo_esr_ctrl_lock;
-	spinlock_t		suspend_lock;
-	spinlock_t		awake_lock;
 	u32			batt_soc_base;
 	u32			batt_info_base;
 	u32			mem_if_base;
 	u32			rradc_base;
 	u32			wa_flags;
-	int			cycle_count;
-	u32			esr_wakeup_ms;
-	u32			awake_status;
 	int			batt_id_ohms;
 	int			charge_status;
 	int			prev_charge_status;
@@ -518,9 +472,6 @@ struct fg_dev {
 	int			delta_soc;
 	int			last_msoc;
 	int			last_recharge_volt_mv;
-	int			delta_temp_irq_count;
-	enum esr_filter_status	esr_flt_sts;
-	int			vbatt_full_volt_uv;
 	int			vbat_critical_low_count;
 	bool			profile_available;
 	enum prof_load_status	profile_load_status;
@@ -530,37 +481,19 @@ struct fg_dev {
 	bool			recharge_soc_adjusted;
 	bool			soc_reporting_ready;
 	bool			use_ima_single_mode;
-	bool			usb_present;
-	bool			twm_state;
 	bool			report_full;
 	bool			use_dma;
 	bool			qnovo_enable;
 	bool			empty_restart_fg;
-	bool			profile_already_find;
 	bool			input_present;
-	bool			batt_temp_low;
-	bool			shutdown_delay;
-	/* cold thermal related */
-	struct cold_thermal *cold_thermal_seq;
-	int			cold_thermal_len;
-	int			curr_cold_thermal_level;
 	enum fg_version		version;
-	bool			suspended;
 	struct batt_params	param;
 	struct delayed_work	soc_monitor_work;
 	struct completion	soc_update;
 	struct completion	soc_ready;
 	struct delayed_work	profile_load_work;
 	struct work_struct	status_change_work;
-	struct work_struct	esr_sw_work;
 	struct delayed_work	sram_dump_work;
-	int			fake_authentic;
-	int			fake_chip_ok;
-	int			maxim_cycle_count;
-	int			batt_fake_temp;
-	struct work_struct	esr_filter_work;
-	struct alarm		esr_filter_alarm;
-	ktime_t			last_delta_temp_time;
 	struct delayed_work	empty_restart_fg_work;
 	struct delayed_work	soc_work;
 };
@@ -594,13 +527,9 @@ struct fg_dbgfs {
 	u32				addr;
 };
 
-extern int fg_decode_voltage_24b(struct fg_sram_param *sp,
-	enum fg_sram_param_id id, int val);
 extern int fg_decode_voltage_15b(struct fg_sram_param *sp,
 	enum fg_sram_param_id id, int val);
 extern int fg_decode_current_16b(struct fg_sram_param *sp,
-	enum fg_sram_param_id id, int val);
-extern int fg_decode_current_24b(struct fg_sram_param *sp,
 	enum fg_sram_param_id id, int val);
 extern int fg_decode_cc_soc(struct fg_sram_param *sp,
 	enum fg_sram_param_id id, int value);
@@ -671,6 +600,4 @@ extern int fg_circ_buf_avg(struct fg_circ_buf *buf, int *avg);
 extern int fg_circ_buf_median(struct fg_circ_buf *buf, int *median);
 extern int fg_lerp(const struct fg_pt *pts, size_t tablesize, s32 input,
 			s32 *output);
-void fg_stay_awake(struct fg_dev *fg, int awake_reason);
-void fg_relax(struct fg_dev *fg, int awake_reason);
 #endif

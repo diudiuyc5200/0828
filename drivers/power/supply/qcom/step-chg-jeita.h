@@ -1,5 +1,5 @@
 /* Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,27 +14,7 @@
 #ifndef __STEP_CHG_H__
 #define __STEP_CHG_H__
 
-#ifdef CONFIG_QPNP_SMB5_NABU
-#define MAX_STEP_CHG_ENTRIES	6
-#else
-#define MAX_STEP_CHG_ENTRIES    5
-#endif
-
-#define BATT_CP_COOL_THRESHOLD		100
-#define BATT_CP_WARM_THRESHOLD		450
-
-#define BATT_COOL_THRESHOLD		150
-#define BATT_WARM_THRESHOLD		450
-#define FFC_CHG_TERM_TEMP_THRESHOLD	350
-enum hvdcp3_class_type {
-	HVDCP3_CLASS_NONE = 0,
-	HVDCP3_CLASS_A_18W,
-	HVDCP3_CLASS_B_27W,
-#ifdef CONFIG_QPNP_SMB5_NABU
-	HVDCP3P5_CLASS_A_18W,
-	HVDCP3P5_CLASS_B_27W,
-#endif
-};
+#define MAX_STEP_CHG_ENTRIES	5
 
 struct step_chg_jeita_param {
 	u32			psy_prop;
