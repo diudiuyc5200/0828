@@ -307,6 +307,10 @@ struct dsi_panel {
 	struct dsi_read_config xy_coordinate_cmds;
 	struct dsi_read_config max_luminance_cmds;
 	struct lockdowninfo_cfg lockdowninfo_read;
+#ifdef CONFIG_PANEL_DC_DIMMING
+	bool dc_dimming_enabled;
+	bool dc_dimming_saved_state;
+#endif
 };
 
 static inline bool dsi_panel_ulps_feature_enabled(struct dsi_panel *panel)
