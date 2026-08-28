@@ -1,5 +1,6 @@
 /* Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
  * only version 2 as published by the Free Software Foundation.
@@ -111,7 +112,6 @@ static int secure_global_size;
 static int global_pt_count;
 static struct kgsl_memdesc gpu_qdss_desc;
 static struct kgsl_memdesc gpu_qtimer_desc;
-static unsigned int context_bank_number;
 
 void kgsl_print_global_pt_entries(struct seq_file *s)
 {
@@ -1230,20 +1230,6 @@ void _enable_gpuhtw_llc(struct kgsl_mmu *mmu, struct kgsl_iommu_pt *iommu_pt)
 		"System cache not enabled for GPU pagetable walks: %d\n", ret);
 }
 
-int kgsl_program_smmu_aperture(void)
-{
-	struct scm_desc desc = {0};
-
-	desc.args[0] = 0xFFFF0000 | ((CP_APERTURE_REG & 0xff) << 8) |
-			(context_bank_number & 0xff);
-	desc.args[1] = 0xFFFFFFFF;
-	desc.args[2] = 0xFFFFFFFF;
-	desc.args[3] = 0xFFFFFFFF;
-	desc.arginfo = SCM_ARGS(4);
-
-	return scm_call2(SCM_SIP_FNID(SCM_SVC_MP, CP_SMMU_APERTURE_ID), &desc);
-}
-
 static int _init_global_pt(struct kgsl_mmu *mmu, struct kgsl_pagetable *pt)
 {
 	int ret = 0;
@@ -1283,10 +1269,22 @@ static int _init_global_pt(struct kgsl_mmu *mmu, struct kgsl_pagetable *pt)
 				ret);
 		goto done;
 	}
-	context_bank_number = cb_num;
+
 	if (!MMU_FEATURE(mmu, KGSL_MMU_GLOBAL_PAGETABLE) &&
 		scm_is_call_available(SCM_SVC_MP, CP_SMMU_APERTURE_ID)) {
-		ret = kgsl_program_smmu_aperture();
+		struct scm_desc desc = {0};
+
+		desc.args[0] = 0xFFFF0000 | ((CP_APERTURE_REG & 0xff) << 8) |
+			(cb_num & 0xff);
+
+		desc.args[1] = 0xFFFFFFFF;
+		desc.args[2] = 0xFFFFFFFF;
+		desc.args[3] = 0xFFFFFFFF;
+		desc.arginfo = SCM_ARGS(4);
+
+		ret = scm_call2(SCM_SIP_FNID(SCM_SVC_MP, CP_SMMU_APERTURE_ID),
+			&desc);
+
 		if (ret) {
 			pr_err("SMMU aperture programming call failed with error %d\n",
 									ret);
@@ -1844,8 +1842,7 @@ static int _iommu_map_guard_page(struct kgsl_pagetable *pt,
 		physaddr = page_to_phys(kgsl_guard_page);
 	}
 
-	if (!MMU_FEATURE(pt->mmu, KGSL_MMU_PAD_VA))
-		protflags &= ~IOMMU_WRITE;
+	protflags &= ~IOMMU_WRITE;
 
 	return _iommu_map_single_page_sync_pc(pt, gpuaddr, physaddr,
 			pad_size >> PAGE_SHIFT, protflags);
@@ -1944,9 +1941,7 @@ static int kgsl_iommu_sparse_dummy_map(struct kgsl_pagetable *pt,
 			return -ENOMEM;
 	}
 
-	map_flags = MMU_FEATURE(pt->mmu, KGSL_MMU_PAD_VA) ?
-				_get_protection_flags(pt, memdesc) :
-				IOMMU_READ | IOMMU_NOEXEC;
+	map_flags = IOMMU_READ | IOMMU_NOEXEC;
 
 	pages = kcalloc(count, sizeof(struct page *), GFP_KERNEL);
 	if (pages == NULL)
@@ -2506,14 +2501,18 @@ static uint64_t kgsl_iommu_find_svm_region(struct kgsl_pagetable *pagetable,
 static bool iommu_addr_in_svm_ranges(struct kgsl_iommu_pt *pt,
 	u64 gpuaddr, u64 size)
 {
+	u64 end = gpuaddr + size;
+
+	/* Make sure size is not zero and we don't wrap around */
+	if (end <= gpuaddr)
+		return false;
+
 	if ((gpuaddr >= pt->compat_va_start && gpuaddr < pt->compat_va_end) &&
-		((gpuaddr + size) > pt->compat_va_start &&
-			(gpuaddr + size) <= pt->compat_va_end))
+		(end > pt->compat_va_start && end <= pt->compat_va_end))
 		return true;
 
 	if ((gpuaddr >= pt->svm_start && gpuaddr < pt->svm_end) &&
-		((gpuaddr + size) > pt->svm_start &&
-			(gpuaddr + size) <= pt->svm_end))
+		(end > pt->svm_start && end <= pt->svm_end))
 		return true;
 
 	return false;
@@ -2573,8 +2572,7 @@ static int kgsl_iommu_get_gpuaddr(struct kgsl_pagetable *pagetable,
 
 	size = kgsl_memdesc_footprint(memdesc);
 
-	align = max_t(uint64_t, 1 << kgsl_memdesc_get_align(memdesc),
-			memdesc->pad_to);
+	align = kgsl_get_align(memdesc);
 
 	if (memdesc->flags & KGSL_MEMFLAGS_FORCE_32BIT) {
 		start = pt->compat_va_start;
