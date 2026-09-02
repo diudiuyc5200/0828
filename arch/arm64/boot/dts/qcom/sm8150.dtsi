@@ -689,17 +689,6 @@
 			reg = <0x0 0x9c000000 0x0 0x02400000>;
 			label = "cont_splash_region";
 		};
-
-	ramoops@9f800000 {
-    compatible = "ramoops";
-    reg = <0x0 0x9f800000 0x0 0x700000>;   // 总大小 7MB
-    record-size = <0x200000>;               // 2MB (内核日志)
-    console-size = <0x200000>;              // 2MB (控制台输出)
-    pmsg-size = <0x200000>;                // 2MB (用户态日志)
-    ftrace-size = <0>;                     // 不需要
-    ecc-size = <0>;
-    no-map;
-};
 		
 		adsp_mem: adsp_region {
 			compatible = "shared-dma-pool";
