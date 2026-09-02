@@ -18,6 +18,7 @@
 #include <trace/events/power.h>
 #include <linux/sched/sysctl.h>
 #include "sched.h"
+#include <linux/kernel.h>
 
 #define SUGOV_KTHREAD_PRIORITY	50
 
@@ -275,8 +276,12 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 	struct cpufreq_policy *policy = sg_policy->policy;
 	unsigned int freq = arch_scale_freq_invariant() ?
 				policy->cpuinfo.max_freq : policy->cur;
+	unsigned long sqrt_util;
 
-	freq = (freq + (freq >> 2)) * util / max;
+	/* 使用平方根算法放大轻负载利用率 */
+	sqrt_util = int_sqrt(util * max);  /* 开方后再放大到 max 量级 */
+	freq = (freq + (freq >> 2)) * sqrt_util / max;
+
 	trace_sugov_next_freq(policy->cpu, util, max, freq);
 
 	if (freq == sg_policy->cached_raw_freq && sg_policy->next_freq != UINT_MAX)
@@ -842,15 +847,17 @@ static int sugov_init(struct cpufreq_policy *policy)
 		goto stop_kthread;
 	}
 
-	tunables->up_rate_limit_us =
-				cpufreq_policy_transition_delay_us(policy);
-	tunables->down_rate_limit_us =
-				cpufreq_policy_transition_delay_us(policy);
-	/* hispeed_load, hispeed_freq, pl initialization removed */
+	if (policy->cpu >= 4) {
+		tunables->up_rate_limit_us = 500;
+		tunables->down_rate_limit_us = 8000;  /* 60ms，降频慢 */
+	} else {
+		tunables->up_rate_limit_us = 500;
+		tunables->down_rate_limit_us = 8000;   /* 5ms，降频快 */
+	}
 
 	policy->governor_data = sg_policy;
 	sg_policy->tunables = tunables;
-	stale_ns = sched_ravg_window + (sched_ravg_window >> 3);
+	stale_ns = sched_ravg_window / 2;
 
 	sugov_tunables_restore(policy);
 

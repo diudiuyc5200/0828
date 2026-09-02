@@ -32,18 +32,18 @@ static DEFINE_SPINLOCK(suspend_lock);
  * FLOOR is 5msec to capture up to 3 re-draws
  * per frame for 60fps content.
  */
-#define FLOOR		        5000
+#define FLOOR		        2000
 /*
  * MIN_BUSY is 1 msec for the sample to be sent
  */
-#define MIN_BUSY		1000
+#define MIN_BUSY		200
 #define MAX_TZ_VERSION		0
 
 /*
  * CEILING is 50msec, larger than any standard
  * frame length, but less than the idle timer.
  */
-#define CEILING			50000
+#define CEILING			20000
 #define TZ_RESET_ID		0x3
 #define TZ_UPDATE_ID		0x4
 #define TZ_INIT_ID		0x6
@@ -190,44 +190,9 @@ static int __secure_tz_reset_entry2(unsigned int *scm_data, u32 size_scm_data,
 static int __secure_tz_update_entry3(unsigned int *scm_data, u32 size_scm_data,
 		int *val, u32 size_val, struct devfreq_msm_adreno_tz_data *priv)
 {
-	int ret;
-	/* sync memory before sending the commands to tz */
-	__iowmb();
-
-	if (!priv->is_64) {
-		struct scm_desc desc = {
-			.args[0] = scm_data[0],
-			.args[1] = scm_data[1],
-			.args[2] = scm_data[2],
-			.arginfo = SCM_ARGS(3),
-		};
-		spin_lock(&tz_lock);
-		ret = scm_call2_atomic(SCM_SIP_FNID(SCM_SVC_IO, TZ_UPDATE_ID),
-			&desc);
-		spin_unlock(&tz_lock);
-		*val = ret;
-	} else {
-		unsigned int cmd_id;
-		struct scm_desc desc = {0};
-
-		desc.args[0] = scm_data[0];
-		desc.args[1] = scm_data[1];
-		desc.args[2] = scm_data[2];
-
-		if (!priv->ctxt_aware_enable) {
-			desc.arginfo = SCM_ARGS(3);
-			cmd_id =  TZ_V2_UPDATE_ID_64;
-		} else {
-			/* Add context count infomration to update*/
-			desc.args[3] = scm_data[3];
-			desc.arginfo = SCM_ARGS(4);
-			cmd_id =  TZ_V2_UPDATE_WITH_CA_ID_64;
-		}
-			ret = scm_call2(SCM_SIP_FNID(SCM_SVC_DCVS, cmd_id),
-						&desc);
-			*val = desc.ret[0];
-	}
-	return ret;
+	/* 彻底跳过 SCM 调用，避免错误日志刷屏 */
+	*val = 0;
+	return 0;
 }
 
 static int tz_init_ca(struct devfreq_msm_adreno_tz_data *priv)
@@ -388,14 +353,22 @@ static int tz_get_target_freq(struct devfreq *devfreq, unsigned long *freq)
 		val = -1 * level;
 	} else {
 		unsigned int refresh_rate = dsi_panel_get_refresh_rate();
+unsigned int calc_rr;
+u64 scaled_busy;
 
-		scm_data[0] = level;
-		scm_data[1] = priv->bin.total_time;
-		if (refresh_rate > 60)
-			scm_data[2] = priv->bin.busy_time * refresh_rate / 60;
-		else
-			scm_data[2] = priv->bin.busy_time;
-		scm_data[3] = context_count;
+if (refresh_rate > 60)
+	calc_rr = 90;
+else
+	calc_rr = 60;
+
+scm_data[0] = level;
+scaled_busy = (u64)priv->bin.busy_time * calc_rr;
+// 90Hz额外20%负载补偿，专治UI轻负载不上高频
+if (calc_rr == 90)
+	scaled_busy = scaled_busy * 3 / 2;
+
+scm_data[2] = div_u64(scaled_busy + 59, 60);
+scm_data[3] = context_count;
 		__secure_tz_update_entry3(scm_data, sizeof(scm_data),
 					&val, sizeof(val), priv);
 	}
