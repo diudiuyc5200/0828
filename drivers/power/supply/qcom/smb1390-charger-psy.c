@@ -2084,7 +2084,7 @@ static int smb1390_probe(struct platform_device *pdev)
 	chip->debug_mask = PR_INFO | PR_INTERRUPT;
 
 	platform_set_drvdata(pdev, chip);
-	chip->cp_role = (int)of_device_get_match_data(chip->dev);
+	chip->cp_role = (int)(uintptr_t)of_device_get_match_data(chip->dev);
 	switch (chip->cp_role) {
 	case CP_MASTER:
 		rc = smb1390_master_probe(chip);

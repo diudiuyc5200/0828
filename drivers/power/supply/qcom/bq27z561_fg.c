@@ -802,8 +802,8 @@ static int fg_read_temperature(struct bq_fg_chip *bq)
 			last_temp = 250;
 		return last_temp;
 	}
-	last_temp = 250;
-	return last_temp;
+	last_temp = temp - 2730;
+	return temp - 2730;
 }
 static int fg_read_volt(struct bq_fg_chip *bq)
 {

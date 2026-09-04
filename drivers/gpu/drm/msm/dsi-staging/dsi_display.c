@@ -4489,73 +4489,8 @@ static int dsi_display_dynamic_clk_configure_cmd(struct dsi_display *display,
 static int dsi_display_dfps_update(struct dsi_display *display,
 				   struct dsi_display_mode *dsi_mode)
 {
-return 0;
-	struct dsi_mode_info *timing;
-	struct dsi_display_ctrl *m_ctrl, *ctrl;
-	struct dsi_display_mode *panel_mode;
-	struct dsi_dfps_capabilities dfps_caps;
-	struct dsi_dyn_clk_caps *dyn_clk_caps;
-	int rc = 0;
-	int i = 0;
-
-	if (!display || !dsi_mode || !display->panel) {
-		pr_err("Invalid params\n");
-		return -EINVAL;
-	}
-	timing = &dsi_mode->timing;
-
-	dsi_panel_get_dfps_caps(display->panel, &dfps_caps);
-	dyn_clk_caps = &(display->panel->dyn_clk_caps);
-	if (!dfps_caps.dfps_support && !dyn_clk_caps->maintain_const_fps) {
-		pr_err("dfps or constant fps not supported\n");
-		return -ENOTSUPP;
-	}
-
-	if (dfps_caps.type == DSI_DFPS_IMMEDIATE_CLK) {
-		pr_err("dfps clock method not supported\n");
-		return -ENOTSUPP;
-	}
-
-	/* For split DSI, update the clock master first */
-
-	pr_debug("configuring seamless dynamic fps\n\n");
-	SDE_EVT32(SDE_EVTLOG_FUNC_ENTRY);
-
-	m_ctrl = &display->ctrl[display->clk_master_idx];
-	rc = dsi_ctrl_async_timing_update(m_ctrl->ctrl, timing);
-	if (rc) {
-		pr_err("[%s] failed to dfps update host_%d, rc=%d\n",
-				display->name, i, rc);
-		goto error;
-	}
-
-	/* Update the rest of the controllers */
-	display_for_each_ctrl(i, display) {
-		ctrl = &display->ctrl[i];
-		if (!ctrl->ctrl || (ctrl == m_ctrl))
-			continue;
-
-		rc = dsi_ctrl_async_timing_update(ctrl->ctrl, timing);
-		if (rc) {
-			pr_err("[%s] failed to dfps update host_%d, rc=%d\n",
-					display->name, i, rc);
-			goto error;
-		}
-	}
-
-	panel_mode = display->panel->cur_mode;
-	memcpy(panel_mode, dsi_mode, sizeof(*panel_mode));
-	/*
-	 * dsi_mode_flags flags are used to communicate with other drm driver
-	 * components, and are transient. They aren't inherently part of the
-	 * display panel's mode and shouldn't be saved into the cached currently
-	 * active mode.
-	 */
-	panel_mode->dsi_mode_flags = 0;
-
-error:
-	SDE_EVT32(SDE_EVTLOG_FUNC_EXIT);
-	return rc;
+	/* DFPS is disabled for testing */
+	return 0;
 }
 
 static int dsi_display_dfps_calc_front_porch(
