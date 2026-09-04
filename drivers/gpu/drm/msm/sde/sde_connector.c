@@ -564,6 +564,19 @@ void sde_connector_set_qsync_params(struct drm_connector *connector)
 	if (prop_dirty) {
 		qsync_propval = sde_connector_get_property(c_conn->base.state,
 						CONNECTOR_PROP_QSYNC_MODE);
+
+		/* 针对视频场景的优化：强制单次触发 */
+		if (c_conn->encoder && c_conn->encoder->crtc) {
+			enum sde_intf_mode intf_mode =
+				sde_encoder_get_intf_mode(c_conn->encoder);
+			if (intf_mode == INTF_MODE_VIDEO) {
+				if (qsync_propval == SDE_RM_QSYNC_CONTINUOUS_MODE) {
+					SDE_DEBUG("video mode: force QSYNC to one-shot\n");
+					qsync_propval = SDE_RM_QSYNC_ONE_SHOT_MODE;
+				}
+			}
+		}
+
 		if (qsync_propval != c_conn->qsync_mode) {
 			SDE_DEBUG("updated qsync mode %d -> %d\n",
 				  c_conn->qsync_mode, qsync_propval);

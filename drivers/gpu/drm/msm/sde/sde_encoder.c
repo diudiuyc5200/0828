@@ -4540,6 +4540,8 @@ static int _helper_flush_qsync(struct sde_encoder_phys *phys_enc)
 	struct sde_rm_hw_iter rm_iter;
 	bool lm_valid = false;
 	bool intf_valid = false;
+	static u64 last_flush_time = 0;
+	u64 now;
 
 	if (!phys_enc || !phys_enc->parent) {
 		SDE_ERROR("invalid encoder\n");
@@ -4547,6 +4549,15 @@ static int _helper_flush_qsync(struct sde_encoder_phys *phys_enc)
 	}
 
 	drm_enc = phys_enc->parent;
+
+	/* 时间阈值：200ms 内禁止重复刷新 */
+	now = ktime_get_ns();
+	if (phys_enc->intf_mode == INTF_MODE_VIDEO &&
+	    (now - last_flush_time) < 200000000ULL) {
+		SDE_DEBUG("qsync flush skipped due to rate limit\n");
+		return 0;
+	}
+	last_flush_time = now;
 
 	/* Flush the interfaces for AVR update or Qsync with INTF TE */
 	if (phys_enc->intf_mode == INTF_MODE_VIDEO ||
