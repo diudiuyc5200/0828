@@ -168,10 +168,6 @@ struct bq_fg_chip {
 	int fake_soc;
 	int fake_temp;
 	int fake_volt;
-	/* 新增：SOC平滑防抖状态 移植自battery‑simulator */
- 	int smooth_current_soc;
- 	int smooth_target_soc;
- 	int stable_target_cnt;
 	/* 新增：charge_full自定义覆盖变量 */
 	int custom_charge_full;
 	bool charge_full_override;
@@ -253,8 +249,6 @@ static int bq_voltage_to_soc(int volt_mv)
 		else					\
 			pr_debug(fmt, ##__VA_ARGS__);	\
 	} while (0)
-	static void smooth_transition(int target, int *p_cur, int step);
-static int is_target_stable(struct bq_fg_chip *bq, int target, int threshold_cnt);
 static int bq_battery_soc_smooth_tracking(struct bq_fg_chip *chip,
 		int raw_soc, int soc, int temp, int curr);
 static int fg_get_raw_soc(struct bq_fg_chip *bq);
@@ -709,9 +703,11 @@ static int fg_get_manufacture_data(struct bq_fg_chip *bq)
 }
 static int fg_read_rsoc(struct bq_fg_chip *bq)
 {
+    static int last_soc;
     int soc_raw_reg;
     u16 real_volt = 0;
     int batt_current;
+    int scale = get_cap_scale(bq);
     int rm_scaled, fcc_scaled;
     int soc_coulomb, soc_volt, final_soc;
     static u32 soc_fix_log_cnt = 0;
@@ -719,39 +715,45 @@ static int fg_read_rsoc(struct bq_fg_chip *bq)
     if (bq->fake_soc > 0)
         return bq->fake_soc;
 
+    // 读取寄存器原始数据
     regmap_read(bq->regmap, bq->regs[BQ_FG_REG_SOC], &soc_raw_reg);
     fg_read_word(bq, bq->regs[BQ_FG_REG_VOLT], &real_volt);
     fg_read_current(bq, &batt_current);
 
+    // 获取缩放后的库仑计容量
     rm_scaled = fg_read_rm(bq);
     fcc_scaled = fg_read_fcc(bq);
 
+    // 库仑计计算SOC（缩放后真实容量）
     if (fcc_scaled <= 0)
-        soc_coulomb = 50;
+        soc_coulomb = last_soc;
     else
         soc_coulomb = DIV_ROUND_CLOSEST(rm_scaled * 100, fcc_scaled);
     soc_coulomb = clamp(soc_coulomb, 0, 100);
 
+    // 查表得到电压对应的SOC
     soc_volt = bq_voltage_to_soc(real_volt);
 
+    u32 coulomb_term, volt_term;
+
     if (batt_current < 0) {
-        /* 充电：信任库仑计 */
+        // 充电：完全信任库仑计，屏蔽电压修正，解决秒满100%
         final_soc = soc_coulomb;
         if (++soc_fix_log_cnt % 20 == 0) {
             bq_dbg(PR_OEM, "CHARGE MODE, coulomb soc:%d, volt soc:%d, volt:%dmV\n",
                 soc_coulomb, soc_volt, real_volt);
         }
     } else {
-        /* 放电：库仑计70% + 电压30%加权兜底 */
-        u32 coulomb_term = (soc_coulomb + 20) * 20;
-        u32 volt_term = (soc_volt + 8) * 80;
-        final_soc = DIV_ROUND_CLOSEST(coulomb_term + volt_term, 100);
-
-        if (++soc_fix_log_cnt % 20 == 0) {
-            bq_dbg(PR_OEM, "DISCHARGE MODE, coulomb_soc:%d volt_soc:%d final_soc:%d volt:%dmV",
+        // 放电：库仑计70%权重 + 电压查表30%权重，柔和兜底，不再高压强制拉高SOC
+        coulomb_term = (soc_coulomb + 20) * 20;
+    volt_term = (soc_volt + 8) * 80;
+    final_soc = DIV_ROUND_CLOSEST(coulomb_term + volt_term, 100);
+// 新增调试打印，每20次输出一次
+     if (++soc_fix_log_cnt % 20 == 0) {
+         bq_dbg(PR_OEM, "DISCHARGE MODE, coulomb_soc:%d volt_soc:%d final_soc:%d volt:%dmV",
                 soc_coulomb, soc_volt, final_soc, real_volt);
-        }
-
+     }
+        // 仅极低电压强制归零，删除3600mV以上乱修正逻辑
         if (real_volt < 3400 && final_soc < 5) {
             final_soc = 0;
             if (++soc_fix_log_cnt % 20 == 0)
@@ -759,9 +761,19 @@ static int fg_read_rsoc(struct bq_fg_chip *bq)
         }
     }
 
-    final_soc = clamp(final_soc, 0, 100);
-    /* !!! 删除原来这里 static old_soc / delta ±2 的全部旧截断代码，平滑交给bq_battery_soc_smooth_tracking !!! */
-    return final_soc;
+    last_soc = clamp(final_soc, 0, 100);
+    // 新增SOC步进限制逻辑
+ static int old_soc = -1;
+ int delta;
+ if (old_soc == -1)
+     old_soc = last_soc;
+ delta = last_soc - old_soc;
+ if (delta > 2)
+     last_soc = old_soc + 2;
+ if (delta < -2)
+     last_soc = old_soc - 2;
+ old_soc = last_soc;
+    return last_soc;
 }
 
 #define FG_REPORT_FULL_SOC	9800
@@ -850,10 +862,8 @@ static int fg_read_rm(struct bq_fg_chip *bq)
 {
     int ret;
     u16 rm_raw;
-    u32 scale;
-    int rm_scaled;
+    u32 scale = get_cap_scale(bq);
     int max_cap;
-
     if (bq->regs[BQ_FG_REG_RM] == INVALID_REG_ADDR) {
         bq_dbg(PR_OEM, "RemainingCapacity command not supported!\n");
         return 0;
@@ -863,8 +873,8 @@ static int fg_read_rm(struct bq_fg_chip *bq)
         bq_dbg(PR_OEM, "could not read RM, ret=%d\n", ret);
         rm_raw = 0;
     }
-    scale = get_cap_scale(bq);
-    rm_scaled = DIV_ROUND_CLOSEST(rm_raw * scale, 1000);
+    // 统一缩放
+    int rm_scaled = DIV_ROUND_CLOSEST(rm_raw * scale, 1000);
     max_cap = fg_read_fcc(bq);
     // 容量限幅保护
     if (rm_scaled <= 0)
@@ -1724,84 +1734,11 @@ struct ffc_smooth ffc_dischg_smooth[FFC_SMOOTH_LEN] = {
 	{600,   72},
 	{1000,  50},
 };
-/**
- * smooth_transition: 阶梯式向target靠近，每次最多step步
- * 移植自 battery‑simulator
- */
-static void smooth_transition(int target, int *p_cur, int step)
-{
-	int diff = target - *p_cur;
-
-	if (diff > 0) {
-		if (diff > step)
-			*p_cur += step;
-		else
-			*p_cur = target;
-	} else if (diff < 0) {
-		if (-diff > step)
-			*p_cur -= step;
-		else
-			*p_cur = target;
-	}
-	*p_cur = clamp(*p_cur, 0, 100);
-}
-
-/**
- * is_target_stable：判断目标是否连续N次采样保持同一个值
- * return 1=稳定允许更新; 0=抖动暂不更新
- */
-static int is_target_stable(struct bq_fg_chip *bq, int target, int threshold_cnt)
-{
-	if (target == bq->smooth_target_soc) {
-		bq->stable_target_cnt++;
-	} else {
-		bq->stable_target_cnt = 1;
-		bq->smooth_target_soc = target;
-	}
-	return bq->stable_target_cnt >= threshold_cnt;
-}
-/*
- * SOC平滑防抖，移植自 battery‑simulator
- * raw_soc: 库仑计原始10000单位raw soc
- * batt_soc: fg_read_rsoc输出的加权后目标soc(0‑100)
- * temp:电池温度
- * batt_ma:电流，<0充电，>0放电
- */
-/*
- * SOC平滑防抖，移植自 battery‑simulator
- * raw_soc: 库仑计原始10000单位raw soc
- * batt_soc: fg_read_rsoc输出的加权后目标soc(0‑100)
- * temp:电池温度
- * batt_ma:电流，<0充电，>0放电
- */
 static int bq_battery_soc_smooth_tracking(struct bq_fg_chip *bq,
-		int raw_soc, int batt_soc, int temp, int batt_ma)
+		int raw_soc, int batt_soc, int batt_temp, int batt_ma)
 {
-#define SMOOTH_STEP		1
-#define STABLE_THRESHOLD	3
-
-	/* 首次初始化 */
-	if (bq->smooth_current_soc < 0) {
-		bq->smooth_current_soc = batt_soc;
-		bq->smooth_target_soc = batt_soc;
-		bq->stable_target_cnt = 0;
-		return clamp(batt_soc, 0, 100);
-	}
-
-	if (batt_ma < 0) {
-		/* 充电：不做稳定计数，直接平滑追赶 */
-		smooth_transition(batt_soc, &bq->smooth_current_soc, SMOOTH_STEP);
-		bq->stable_target_cnt = 0;
-	} else {
-		/* 放电：目标必须连续多次相同才允许向下更新，过滤瞬时负载毛刺 */
-		if (is_target_stable(bq, batt_soc, STABLE_THRESHOLD)) {
-			smooth_transition(batt_soc, &bq->smooth_current_soc, SMOOTH_STEP);
-		}
-	}
-
-	return clamp(bq->smooth_current_soc, 0, 100);
+	return batt_soc;
 }
-
 static void fg_monitor_workfunc(struct work_struct *work)
 {
 	struct bq_fg_chip *bq = container_of(work, struct bq_fg_chip, monitor_work.work);
@@ -1812,7 +1749,7 @@ static void fg_monitor_workfunc(struct work_struct *work)
 			return;*/
 		fg_update_status(bq);
 	}
-	schedule_delayed_work(&bq->monitor_work, 5 * HZ);
+	schedule_delayed_work(&bq->monitor_work, 10 * HZ);
 }
 static int bq_parse_dt(struct bq_fg_chip *bq)
 {
@@ -1906,10 +1843,6 @@ static int bq_fg_probe(struct i2c_client *client,
 	bq->fake_soc	= -EINVAL;
 	bq->fake_temp	= -EINVAL;
 	bq->fake_volt	= -EINVAL;
-	/* === 新增平滑状态初始化 === */
-	bq->smooth_current_soc = -1;
-	bq->smooth_target_soc = 0;
-	bq->stable_target_cnt = 0;
 	/* 自定义容量覆盖变量初始化 */
 	bq->charge_full_override = false;
 	bq->custom_charge_full = 0;
@@ -1939,7 +1872,7 @@ bq->charge_full_design_override = false;
 	if (ret)
 		bq_dbg(PR_OEM, "Failed to register sysfs, err:%d\n", ret);
 	INIT_DELAYED_WORK(&bq->monitor_work, fg_monitor_workfunc);
-	schedule_delayed_work(&bq->monitor_work,5 * HZ);
+	schedule_delayed_work(&bq->monitor_work,10 * HZ);
 	bq_dbg(PR_OEM, "bq fuel gauge probe successfully, %s\n",
 			device2str[bq->chip]);
 	return 0;
