@@ -4553,7 +4553,7 @@ static int _helper_flush_qsync(struct sde_encoder_phys *phys_enc)
 	/* 时间阈值：200ms 内禁止重复刷新 */
 	now = ktime_get_ns();
 	if (phys_enc->intf_mode == INTF_MODE_VIDEO &&
-	    (now - last_flush_time) < 200000000ULL) {
+	    (now - last_flush_time) < 500000000ULL) {
 		SDE_DEBUG("qsync flush skipped due to rate limit\n");
 		return 0;
 	}

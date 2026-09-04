@@ -1373,6 +1373,9 @@ static int sde_encoder_phys_cmd_prepare_for_kickoff(
 					phys_enc->hw_pp, &tc_cfg);
 
 		SDE_EVT32(DRMID(phys_enc->parent), tc_cfg.sync_threshold_start);
+		        /* 当qsync/mode发生变更，强制打上intf flush bitmask，热切换刷新率立即生效 */
+        if (phys_enc->hw_ctl && phys_enc->hw_ctl->ops.update_bitmask_intf)
+                phys_enc->hw_ctl->ops.update_bitmask_intf(phys_enc->hw_ctl, phys_enc->intf_idx, 1);
 	}
 
 	SDE_DEBUG_CMDENC(cmd_enc, "pp:%d pending_cnt %d\n",
