@@ -4489,6 +4489,7 @@ static int dsi_display_dynamic_clk_configure_cmd(struct dsi_display *display,
 static int dsi_display_dfps_update(struct dsi_display *display,
 				   struct dsi_display_mode *dsi_mode)
 {
+return 0;
 	struct dsi_mode_info *timing;
 	struct dsi_display_ctrl *m_ctrl, *ctrl;
 	struct dsi_display_mode *panel_mode;
