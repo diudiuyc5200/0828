@@ -428,7 +428,7 @@ static void sugov_update_single(struct update_util_data *hook, u64 time,
 		 * 如果 util 超过阈值，直接跳到最大频率的 70%
 		 */
 		if (policy->cpu == 7 && util > 10) {
-			unsigned int target = policy->max * 84 / 100;
+			unsigned int target = policy->max * 68 / 100;
 			if (next_f < target)
 				next_f = target;
 		}
@@ -863,7 +863,7 @@ static int sugov_init(struct cpufreq_policy *policy)
 		tunables->down_rate_limit_us = 100;  /* 60ms，降频慢 */
 	} else {
 		tunables->up_rate_limit_us = 100;
-		tunables->down_rate_limit_us = 500;   /* 5ms，降频快 */
+		tunables->down_rate_limit_us = 5000;   /* 5ms，降频快 */
 	}
 
 	policy->governor_data = sg_policy;

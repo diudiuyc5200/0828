@@ -753,7 +753,7 @@ static int fg_read_rsoc(struct bq_fg_chip *bq)
         }
 
         if (real_volt < 3400 && final_soc < 5) {
-            final_soc = 0;
+            final_soc = 3;
             if (++soc_fix_log_cnt % 20 == 0)
                 bq_dbg(PR_OEM, "DISCHARGE LOW VOLT FORCE SOC 0, volt:%dmV\n", real_volt);
         }
