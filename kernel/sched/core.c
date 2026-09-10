@@ -8040,9 +8040,47 @@ static int cpu_cgroup_css_online(struct cgroup_subsys_state *css)
 {
 	struct task_group *tg = css_tg(css);
 	struct task_group *parent = css_tg(css->parent);
+#ifdef CONFIG_UCLAMP_TASK_GROUP
+	const char *cgname = NULL;
+#endif
 
 	if (parent)
 		sched_online_group(tg, parent);
+
+#ifdef CONFIG_UCLAMP_TASK_GROUP
+	/* cgroup 名字（cgroup v1 的 kernfs 节点名） */
+	if (css->cgroup && css->cgroup->kn)
+		cgname = css->cgroup->kn->name;
+
+	if (cgname) {
+		mutex_lock(&uclamp_mutex);
+		rcu_read_lock();
+
+		if (!strcmp(cgname, "top-app")) {
+			/* top-app: 80%，latency_sensitive */
+			tg->uclamp_pct[UCLAMP_MIN] = 8000;
+			uclamp_se_set(&tg->uclamp_req[UCLAMP_MIN], 819, false);
+			tg->uclamp_pct[UCLAMP_MAX] = 10000;
+			uclamp_se_set(&tg->uclamp_req[UCLAMP_MAX], 1024, false);
+			tg->latency_sensitive = 1;
+			tg->boosted = 1;
+
+		} else if (!strcmp(cgname, "foreground")) {
+			/* foreground: 40% */
+			tg->uclamp_pct[UCLAMP_MIN] = 4000;
+			uclamp_se_set(&tg->uclamp_req[UCLAMP_MIN], 410, false);
+			tg->uclamp_pct[UCLAMP_MAX] = 10000;
+			uclamp_se_set(&tg->uclamp_req[UCLAMP_MAX], 1024, false);
+		}
+
+		/* 打开 uclamp 的 static branch，否则调度器不读 */
+		static_branch_enable(&sched_uclamp_used);
+
+		rcu_read_unlock();
+		mutex_unlock(&uclamp_mutex);
+	}
+#endif
+
 	return 0;
 }
 
@@ -8709,6 +8747,32 @@ static struct cftype cpu_files[] = {
 		.name = "rt_period_us",
 		.read_u64 = cpu_rt_period_read_uint,
 		.write_u64 = cpu_rt_period_write_uint,
+	},
+#endif
+#ifdef CONFIG_UCLAMP_TASK_GROUP
+	{
+		.name = "uclamp.min",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = cpu_uclamp_min_show,
+		.write = cpu_uclamp_min_write,
+	},
+	{
+		.name = "uclamp.max",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = cpu_uclamp_max_show,
+		.write = cpu_uclamp_max_write,
+	},
+	{
+		.name = "uclamp.latency_sensitive",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_u64 = cpu_uclamp_ls_read_u64,
+		.write_u64 = cpu_uclamp_ls_write_u64,
+	},
+	{
+		.name = "uclamp.boosted",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_u64 = cpu_uclamp_boost_read_u64,
+		.write_u64 = cpu_uclamp_boost_write_u64,
 	},
 #endif
 	{ }	/* Terminate */
