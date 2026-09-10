@@ -77,7 +77,7 @@
 
 		qcom,chipid = <0x06040000>;
 
-		qcom,initial-pwrlevel = <5>;
+		qcom,initial-pwrlevel = <4>;
 
 		qcom,gpu-quirk-secvid-set-once;
 		qcom,gpu-quirk-cx-gdsc;
