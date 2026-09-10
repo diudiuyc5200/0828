@@ -1147,7 +1147,7 @@ config SCHED_CASS
          given moment.
 config SCHED_BORE
 	bool "Burst-Oriented Response Enhancer"
-	default y
+	default n
 	help
 	  In Desktop and Mobile computing, one might prefer interactive
 	  tasks to keep responsive no matter what they run in the background.
