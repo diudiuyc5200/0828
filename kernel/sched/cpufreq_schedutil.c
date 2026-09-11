@@ -423,6 +423,16 @@ static void sugov_update_single(struct update_util_data *hook, u64 time,
 		/* sugov_walt_adjust removed */
 		next_f = get_next_freq(sg_policy, util, max);
 		
+			/*
+		 * 针对大核（CPU >= 4）的轻负载快速升频
+		 * 如果 util 超过阈值，直接跳到最大频率的 70%
+		 */
+		if (policy->cpu == 7 && util > 10) {
+			unsigned int target = policy->max * 68 / 100;
+			if (next_f < target)
+				next_f = target;
+		}
+		
 		/*
 		 * Do not reduce the frequency if the CPU has not been idle
 		 * recently, as the reduction is likely to be premature then.
@@ -850,10 +860,10 @@ static int sugov_init(struct cpufreq_policy *policy)
 
 	if (policy->cpu == 7) {
 		tunables->up_rate_limit_us = 100;
-		tunables->down_rate_limit_us = 500;  /* 60ms，降频慢 */
+		tunables->down_rate_limit_us = 100;  /* 60ms，降频慢 */
 	} else {
 		tunables->up_rate_limit_us = 100;
-		tunables->down_rate_limit_us = 500;   /* 5ms，降频快 */
+		tunables->down_rate_limit_us = 5000;   /* 5ms，降频快 */
 	}
 
 	policy->governor_data = sg_policy;
