@@ -18,7 +18,8 @@ include $(srctree)/arch/arm64/boot/dts/Makefile
 
 OBJCOPYFLAGS_Image :=-O binary -R .note -R .note.gnu.build-id -R .comment -S
 
-targets := Image Image.bz2 Image.gz Image.lz4 Image.lzma Image.lzo dtbo.img
+# ✅加入dtb到targets，强制kbuild编译dtb
+targets := Image Image.bz2 Image.gz Image.lz4 Image.lzma Image.lzo dtb dtbo.img
 
 DTB_NAMES := $(subst $\",,$(CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE_NAMES))
 ifneq ($(DTB_NAMES),)
@@ -26,15 +27,12 @@ DTB_LIST := $(addsuffix .dtb,$(DTB_NAMES))
 else
 DTB_LIST := $(dtb-y)
 endif
-DTB_OBJS := $(shell find $(obj)/dts/ -name \*.dtb)
 
-DTBO_OBJS := $(shell find $(obj)/dts/ -name \*.dtbo)
+# ==========修复：删掉shell find！不要在make解析期扫描文件==========
+DTB_OBJS := $(addprefix $(obj)/dts/qcom/,$(DTB_LIST))
+DTBO_OBJS := $(addprefix $(obj)/dts/,$(dtbo-y))
 
 # Add RTIC DTB to the DTB list if RTIC MPGen is enabled
-# Note, we keep this for compatibility with
-# BUILD_ARM64_APPENDED_DTB_IMAGE targets.
-# The rtic_mp.dts would be generated with the vmlinux if
-# MPGen enabled (RTIC_MPGEN defined).
 ifdef RTIC_MPGEN
 DTB_OBJS += rtic_mp.dtb
 endif
@@ -52,6 +50,7 @@ $(obj)/Image-dtb-hdr: $(obj)/Image FORCE
 	echo -n 'UNCOMPRESSED_IMG' > $@ && \
 	$(call size_append, $(filter-out FORCE,$^)) >> $@
 
+# ✅显式依赖DTB_OBJS，make保证dtb编译完再拼接
 $(obj)/Image-dtb: $(obj)/Image-dtb-hdr $(obj)/Image $(DTB_OBJS) FORCE
 	$(call if_changed,cat)
 
@@ -78,5 +77,4 @@ install:
 	$(obj)/Image System.map "$(INSTALL_PATH)"
 
 zinstall:
-	$(CONFIG_SHELL) $(srctree)/$(src)/install.sh $(KERNELRELEASE) \
-	$(obj)/Image.gz System.map "$(INSTALL_PATH)"
+	$(CONFIG_SHELL) $(srctree)/$(src)/install.sh $(obj)/Image.gz System.map "$(INSTALL_PATH)"
