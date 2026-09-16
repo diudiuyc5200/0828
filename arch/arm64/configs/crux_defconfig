@@ -859,7 +859,7 @@ CONFIG_LRU_GEN_ENABLED=y
 # CONFIG_LRU_GEN_STATS is not set
 # BBG
 CONFIG_LSM="lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"
-CONFIG_BBG=y
+CONFIG_BBG=n
 # ReKernel
 CONFIG_REKERNEL=y
 CONFIG_REKERNEL_NETWORK=n
