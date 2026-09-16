@@ -15,7 +15,6 @@
 #include <linux/ktime.h>
 #include <linux/hrtimer.h>
 #include <linux/proc_fs.h>
-#include <linux/sched/task.h>
 #include "millet.h"
 #include "binder_oem.h"
 
