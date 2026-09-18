@@ -47,7 +47,7 @@
 #include <linux/cgroup.h>
 
 #ifdef CONFIG_REKERNEL
-#include "../rekernel/rekernel.h"
+#include <linux/rekernel.h>
 #endif
 
 #define CREATE_TRACE_POINTS

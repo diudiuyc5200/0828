@@ -8,7 +8,7 @@
 #include <linux/printk.h>
 #include <linux/slab.h>
 
-#include "rekernel.h"
+#include <linux/rekernel.h>
 static struct sock *rekernel_netlink = NULL;
 extern struct net init_net;
 static int netlink_unit = NETLINK_REKERNEL_MIN;

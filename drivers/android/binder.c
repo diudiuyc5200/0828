@@ -79,7 +79,7 @@
 #include "binder_trace.h"
 #include "dbitmap.h"
 #ifdef CONFIG_REKERNEL
-#include "../rekernel/rekernel.h"
+#include <linux/rekernel.h>
 #endif
 
 static HLIST_HEAD(binder_deferred_list);
