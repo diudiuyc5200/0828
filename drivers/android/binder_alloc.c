@@ -33,7 +33,7 @@
 #include "binder_alloc.h"
 #include "binder_trace.h"
 #ifdef CONFIG_REKERNEL
-#include "drivers/rekernel/rekernel.h"
+#include "../rekernel/rekernel.h"
 #endif
 
 struct list_lru binder_alloc_lru;
