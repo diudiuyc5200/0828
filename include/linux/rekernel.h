@@ -3,7 +3,7 @@
 
 #include <linux/sched.h>
 #include <linux/sched/jobctl.h>
-#include <linux/freezer.h>
+#include <linux/jump_label.h>
 
 /* netlink constants */
 #define NETLINK_REKERNEL_MAX		26
@@ -19,9 +19,27 @@
 #define RESERVE_ORDER			17
 #define WARN_AHEAD_SPACE		(1 << RESERVE_ORDER)
 
+/* static key: 启用后所有高频检查都是 0 开销 */
+DECLARE_STATIC_KEY_FALSE(rekernel_enabled_key);
+
+static inline bool rekernel_is_ready(void)
+{
+	return static_branch_unlikely(&rekernel_enabled_key);
+}
+
 static inline bool line_is_frozen(struct task_struct *task)
 {
-	return frozen(task->group_leader) || freezing(task->group_leader);
+	struct task_struct *leader = task->group_leader;
+
+	/* cgroup v2: 任务已进入 freezer trap */
+	if (READ_ONCE(leader->frozen))
+		return true;
+
+	/* cgroup v2: 冻结请求已排队 */
+	if (READ_ONCE(leader->jobctl) & JOBCTL_TRAP_FREEZE)
+		return true;
+
+	return false;
 }
 
 /* function prototypes */
