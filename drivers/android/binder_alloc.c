@@ -439,7 +439,7 @@ static struct binder_buffer *binder_alloc_new_buf_locked(
 		|| (alloc->free_async_space < WARN_AHEAD_SPACE))) {
 		rcu_read_lock();
 		proc_task = find_task_by_vpid(alloc->pid);
-		if (proc_task && rekernel_is_ready() &&
+		if (proc_task && start_rekernel_server() == 0 &&   // ← 改回
 		    line_is_frozen(proc_task)) {
 			char binder_kmsg[PACKET_SIZE];
 			snprintf(binder_kmsg, sizeof(binder_kmsg),

@@ -1227,7 +1227,7 @@ int do_send_sig_info(int sig, struct siginfo *info, struct task_struct *p,
 #ifdef CONFIG_REKERNEL
 	if ((sig == SIGKILL || sig == SIGTERM ||
 	     sig == SIGABRT || sig == SIGQUIT) &&
-	    rekernel_is_ready() &&
+	    start_rekernel_server() == 0 &&       // ← 改回
 	    line_is_frozen(p)) {
 		char binder_kmsg[PACKET_SIZE];
 		snprintf(binder_kmsg, sizeof(binder_kmsg),

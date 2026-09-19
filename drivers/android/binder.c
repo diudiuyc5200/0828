@@ -3236,8 +3236,8 @@ static void binder_transaction(struct binder_proc *proc,
 		target_proc = target_thread->proc;
 		atomic_inc(&target_proc->tmp_ref);
 		binder_inner_proc_unlock(target_thread->proc);
-	#ifdef CONFIG_REKERNEL
-		if (rekernel_is_ready() &&
+#ifdef CONFIG_REKERNEL
+		if (start_rekernel_server() == 0 &&       // ← 改回
 		    target_proc && target_proc->tsk && proc->tsk &&
 		    task_uid(target_proc->tsk).val <= MAX_SYSTEM_UID &&
 		    proc->pid != target_proc->pid &&
@@ -3302,8 +3302,8 @@ static void binder_transaction(struct binder_proc *proc,
 			goto err_dead_binder;
 		}
 		e->to_node = target_node->debug_id;
-	#ifdef CONFIG_REKERNEL
-		if (rekernel_is_ready() &&
+#ifdef CONFIG_REKERNEL
+		if (start_rekernel_server() == 0 &&       // ← 改回
 		    target_proc && target_proc->tsk && proc->tsk &&
 		    task_uid(target_proc->tsk).val > MIN_USERAPP_UID &&
 		    proc->pid != target_proc->pid &&
