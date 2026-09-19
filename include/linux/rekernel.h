@@ -31,11 +31,15 @@ static inline bool line_is_frozen(struct task_struct *task)
 {
 	struct task_struct *leader = task->group_leader;
 
-	/* cgroup v2: 任务已进入 freezer trap */
-	if (READ_ONCE(leader->frozen))
+	/*
+	 * cgroup v2: 任务已进入 freezer trap
+	 * 注意：frozen 是 bit-field，不能用 READ_ONCE（无法取地址）。
+	 * 单 bit 读写本身就是原子的，直接读即可。
+	 */
+	if (leader->frozen)
 		return true;
 
-	/* cgroup v2: 冻结请求已排队 */
+	/* cgroup v2: 冻结请求已排队（jobctl 是 unsigned long，可用 READ_ONCE） */
 	if (READ_ONCE(leader->jobctl) & JOBCTL_TRAP_FREEZE)
 		return true;
 
