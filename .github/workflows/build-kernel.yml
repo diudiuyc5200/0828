@@ -289,7 +289,7 @@ jobs:
             rm -rf "./drivers/kernelsu"
           fi
           # Apply new KernelSU patches
-          curl -LSs "https://raw.githubusercontent.com/diudiuyc5200/SukiSU-Ultra/main/kernel/setup.sh" | bash
+          curl -LSs "https://raw.githubusercontent.com/diudiuyc5200/rsu/main/kernel/setup.sh" | bash
       - name: Setup Configuration for Kernel
         run: |
           cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
