@@ -2945,7 +2945,9 @@ void sde_connector_dc_get_current_alpha(struct drm_connector *connector,
 	struct dsi_bridge *c_bridge = NULL;
 
 	if (!connector || !connector->encoder || !connector->encoder->bridge) {
-		SDE_ERROR("Invalid connector/encoder/bridge ptr\n");
+		SDE_DEBUG("Invalid connector/encoder/bridge ptr\n");
+		if (alpha)
+			*alpha = 0;
 		return;
 	}
 
@@ -2953,7 +2955,9 @@ void sde_connector_dc_get_current_alpha(struct drm_connector *connector,
 	display = c_bridge->display;
 
 	if (!display || !display->panel) {
-		SDE_ERROR("invalid display/panel ptr\n");
+		SDE_DEBUG("invalid display/panel ptr\n");
+		if (alpha)
+			*alpha = 0;
 		return;
 	}
 
@@ -2969,7 +2973,9 @@ void sde_connector_dc_get_current_backlight(struct drm_connector *connector, uin
 	struct dsi_bridge *c_bridge = NULL;
 
 	if (!connector || !connector->encoder || !connector->encoder->bridge) {
-		SDE_ERROR("Invalid connector/encoder/bridge ptr\n");
+		SDE_DEBUG("Invalid connector/encoder/bridge ptr\n");
+		if (brightness)
+			*brightness = 0;
 		return;
 	}
 
@@ -2977,7 +2983,9 @@ void sde_connector_dc_get_current_backlight(struct drm_connector *connector, uin
 	display = c_bridge->display;
 
 	if (!display || !display->panel) {
-		SDE_ERROR("invalid display/panel ptr\n");
+		SDE_DEBUG("invalid display/panel ptr\n");
+		if (brightness)
+			*brightness = 0;
 		return;
 	}
 

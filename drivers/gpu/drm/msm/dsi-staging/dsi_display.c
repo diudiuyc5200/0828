@@ -8110,7 +8110,7 @@ ssize_t dsi_display_mipi_reg_write(struct drm_connector *connector,
 	struct dsi_bridge *c_bridge = NULL;
 
 	if (!connector || !connector->encoder || !connector->encoder->bridge) {
-		pr_err("Invalid invalid connector/encoder/bridge ptr\n");
+		pr_debug("Invalid connector/encoder/bridge ptr\n");
 		return -EINVAL;
 	}
 
@@ -8131,7 +8131,7 @@ ssize_t dsi_display_mipi_reg_read(struct drm_connector *connector,
 	struct dsi_bridge *c_bridge = NULL;
 
 	if (!connector || !connector->encoder || !connector->encoder->bridge) {
-		pr_err("Invalid invalid connector/encoder/bridge ptr\n");
+		pr_debug("Invalid connector/encoder/bridge ptr\n");
 		return -EINVAL;
 	}
 
@@ -8155,7 +8155,7 @@ int dsi_display_set_dc_dimming(struct drm_connector *connector,
 	struct dsi_bridge *c_bridge = NULL;
 
 	if (!connector || !connector->encoder || !connector->encoder->bridge) {
-		pr_err("Invalid connector/encoder/bridge ptr\n");
+		pr_debug("Invalid connector/encoder/bridge ptr\n");
 		return -EINVAL;
 	}
 
@@ -8178,7 +8178,7 @@ ssize_t dsi_display_get_dc_dimming(struct drm_connector *connector, char *buf)
 	bool status;
 
 	if (!connector || !connector->encoder || !connector->encoder->bridge) {
-		pr_err("Invalid connector/encoder/bridge ptr\n");
+		pr_debug("Invalid connector/encoder/bridge ptr\n");
 		return -EINVAL;
 	}
 

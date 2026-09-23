@@ -325,6 +325,11 @@ int dsi_bridge_interface_enable(int timeout)
 {
 	int ret = 0;
 
+	if (!gbridge) {
+		pr_debug("bridge not yet initialized\n");
+		return -EAGAIN;
+	}
+
 	ret = wait_event_timeout(resume_wait_q,
 		!atomic_read(&resume_pending),
 		msecs_to_jiffies(WAIT_RESUME_TIMEOUT));
@@ -418,7 +423,7 @@ int dsi_bridge_disp_set_doze_backlight(struct drm_connector *connector,
 	struct dsi_bridge *c_bridge = NULL;
 
 	if (!connector || !connector->encoder || !connector->encoder->bridge) {
-		pr_err("Invalid connector/encoder/bridge ptr\n");
+		pr_debug("Invalid connector/encoder/bridge ptr\n");
 		return -EINVAL;
 	}
 
@@ -440,7 +445,7 @@ ssize_t dsi_bridge_disp_get_doze_backlight(struct drm_connector *connector,
 	struct dsi_bridge *c_bridge = NULL;
 
 	if (!connector || !connector->encoder || !connector->encoder->bridge) {
-		pr_err("Invalid connector/encoder/bridge ptr\n");
+		pr_debug("Invalid connector/encoder/bridge ptr\n");
 		return -EINVAL;
 	}
 
