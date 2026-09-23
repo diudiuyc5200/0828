@@ -173,6 +173,7 @@ struct msm_dsi_host {
 	u32 dma_cmd_ctrl_restore;
 
 	bool registered;
+    bool enabled;
 	bool power_on;
 	int irq;
 };
@@ -965,10 +966,48 @@ static void dsi_wait4video_done(struct msm_dsi_host *msm_host)
 
 static void dsi_wait4video_eng_busy(struct msm_dsi_host *msm_host)
 {
-	if (!(msm_host->mode_flags & MIPI_DSI_MODE_VIDEO))
-		return;
+	u32 data;
+	unsigned long timeout;
 
-	if (msm_host->power_on) {
+	data = dsi_read(msm_host, REG_DSI_STATUS0);
+
+	if (msm_host->mode_flags & MIPI_DSI_MODE_VIDEO) {
+		/* if video mode engine is not busy, its because
+		 * either timing engine was not turned on or the
+		 * DSI controller has finished transmitting the video
+		 * data already, so no need to wait in those cases
+		 */
+		if (!(data & DSI_STATUS0_VIDEO_MODE_ENGINE_BUSY))
+			return;
+	} else {
+		/*
+		 * command mode: frames are TE-triggered HS bursts
+		 * submitted by the DPU encoder path, which does not
+		 * take cmd_mutex. Wait for the in‑flight burst to
+		 * drain before putting DCS commands on the bus,
+		 * otherwise the command DMA interleaves with the
+		 * video burst and the HS transmission gets stretched
+		 * past its timeout (dsi_err_worker status=5 with
+		 * DSI_HS_TX_TIMEOUT + four‑lane FIFO underflow,
+		 * visible as flicker/tearing).
+		 */
+		if (!(data & DSI_STATUS0_CMD_MODE_ENGINE_BUSY))
+			return;
+
+		timeout = jiffies + msecs_to_jiffies(70);
+		do {
+			usleep_range(50, 100);
+			data = dsi_read(msm_host, REG_DSI_STATUS0);
+		} while ((data & DSI_STATUS0_CMD_MODE_ENGINE_BUSY) &&
+			 time_before(jiffies, timeout));
+
+		if (data & DSI_STATUS0_CMD_MODE_ENGINE_BUSY)
+			DRM_DEV_ERROR(&msm_host->pdev->dev,
+				      "wait for cmd mode engine idle timed out\n");
+		return;
+	}
+
+	if (msm_host->power_on && msm_host->enabled) {
 		dsi_wait4video_done(msm_host);
 		/* delay 4 ms to skip BLLP */
 		usleep_range(2000, 4000);
@@ -1894,8 +1933,17 @@ int msm_dsi_host_xfer_prepare(struct mipi_dsi_host *host,
 	 * mdss interrupt is generated in mdp core clock domain
 	 * mdp clock need to be enabled to receive dsi interrupt
 	 */
-	pm_runtime_get_sync(&msm_host->pdev->dev);
-	dsi_link_clk_enable(msm_host);
+		pm_runtime_get_sync(&msm_host->pdev->dev);
+
+	/*
+	 * The active command‑mode display already owns the DSI link clocks.
+	 * Retuning/re‑enabling them while CMD MDP is pushing a TE‑triggered
+	 * frame can starve the DSI HS lane FIFOs. Only acquire link clocks
+	 * here when the host is not already powering an enabled display.
+	 */
+	if (!msm_host->power_on || !msm_host->enabled) {
+		dsi_link_clk_enable(msm_host);
+	}
 
 	/* TODO: vote for bus bandwidth */
 
@@ -1925,7 +1973,8 @@ void msm_dsi_host_xfer_restore(struct mipi_dsi_host *host,
 
 	/* TODO: unvote for bus bandwidth */
 
-	dsi_link_clk_disable(msm_host);
+		if (!msm_host->power_on || !msm_host->enabled)
+		dsi_link_clk_disable(msm_host);
 	pm_runtime_put_autosuspend(&msm_host->pdev->dev);
 }
 

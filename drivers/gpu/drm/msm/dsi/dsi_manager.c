@@ -496,6 +496,10 @@ static void dsi_mgr_bridge_pre_enable(struct drm_bridge *bridge)
 		}
 	}
 
+	msm_dsi->host->enabled = true;
+ 	if (is_dual_dsi && msm_dsi1)
+ 		msm_dsi1->host->enabled = true;
+ 
 	if (panel) {
 		ret = drm_panel_enable(panel);
 		if (ret) {
@@ -577,6 +581,10 @@ static void dsi_mgr_bridge_post_disable(struct drm_bridge *bridge)
 			pr_err("%s: host1 disable failed, %d\n", __func__, ret);
 	}
 
+	msm_dsi->host->enabled = false;
+ 	if (is_dual_dsi && msm_dsi1)
+ 		msm_dsi1->host->enabled = false;
+ 
 	if (panel) {
 		ret = drm_panel_unprepare(panel);
 		if (ret)
