@@ -297,7 +297,7 @@ static void msm_restart_prepare(const char *cmd)
 	 */
 	if (!is_kdump_kernel())
 		set_dload_mode(download_mode &&
-			(in_panic || restart_mode == RESTART_DLOAD));
+		(restart_mode == RESTART_DLOAD));
 #endif
 
 	if (qpnp_pon_check_hard_reset_stored()) {
