@@ -145,47 +145,48 @@ static unsigned int msm_cpufreq_get_freq(unsigned int cpu)
 
 static int msm_cpufreq_init(struct cpufreq_policy *policy)
 {
-	int cur_freq;
-	int index;
-	int ret = 0;
-	struct cpufreq_frequency_table *table =
-			per_cpu(freq_table, policy->cpu);
-	int cpu;
+    int cur_freq;
+    int index;
+    int ret = 0;
+    struct cpufreq_frequency_table *table =
+            per_cpu(freq_table, policy->cpu);
+    int cpu;
 
-	/*
-	 * In some SoC, some cores are clocked by same source, and their
-	 * frequencies can not be changed independently. Find all other
-	 * CPUs that share same clock, and mark them as controlled by
-	 * same policy.
-	 */
-	for_each_possible_cpu(cpu)
-		if (cpu_clk[cpu] == cpu_clk[policy->cpu])
-			cpumask_set_cpu(cpu, policy->cpus);
+    for_each_possible_cpu(cpu)
+        if (cpu_clk[cpu] == cpu_clk[policy->cpu])
+            cpumask_set_cpu(cpu, policy->cpus);
 
-	ret = cpufreq_table_validate_and_show(policy, table);
-	if (ret) {
-		pr_debug("cpufreq: failed to get policy min/max\n");
-		return ret;
-	}
+    ret = cpufreq_table_validate_and_show(policy, table);
+    if (ret) {
+        pr_debug("cpufreq: failed to get policy min/max\n");
+        return ret;
+    }
 
-	cur_freq = clk_get_rate(cpu_clk[policy->cpu])/1000;
+    /* ===== 新增：限制 CPU7 最大频率为 2841600 ===== */
+    if (policy->cpu == 7) {
+        policy->max = 2841600;
+        policy->cpuinfo.max_freq = 2841600;
+        policy->user_policy.max = 2841600;
+        pr_info("cpufreq: CPU7 max limited to %u kHz\n", policy->max);
+    }
+    /* ===== 新增结束 ===== */
 
-	index =  cpufreq_frequency_table_target(policy, cur_freq,
-						CPUFREQ_RELATION_H);
-	/*
-	 * Call set_cpu_freq unconditionally so that when cpu is set to
-	 * online, frequency limit will always be updated.
-	 */
-	ret = set_cpu_freq(policy, table[index].frequency,
-			   table[index].driver_data);
-	if (ret)
-		return ret;
-	pr_debug("cpufreq: cpu%d init at %d switching to %d\n",
-			policy->cpu, cur_freq, table[index].frequency);
-	policy->cur = table[index].frequency;
-	policy->dvfs_possible_from_any_cpu = true;
+    cur_freq = clk_get_rate(cpu_clk[policy->cpu])/1000;
 
-	return 0;
+    index = cpufreq_frequency_table_target(policy, cur_freq,
+                                            CPUFREQ_RELATION_H);
+
+    ret = set_cpu_freq(policy, table[index].frequency,
+                       table[index].driver_data);
+    if (ret)
+        return ret;
+
+    pr_debug("cpufreq: cpu%d init at %d switching to %d\n",
+            policy->cpu, cur_freq, table[index].frequency);
+    policy->cur = table[index].frequency;
+    policy->dvfs_possible_from_any_cpu = true;
+
+    return 0;
 }
 
 static int qcom_cpufreq_dead_cpu(unsigned int cpu)
