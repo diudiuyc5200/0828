@@ -754,7 +754,7 @@ static int fg_read_rsoc(struct bq_fg_chip *bq)
                 soc_coulomb, soc_volt, final_soc, real_volt);
      }
         // 仅极低电压强制归零，删除3600mV以上乱修正逻辑
-        if (real_volt < 3400 && final_soc < 5) {
+        if (real_volt < 3400 && final_soc < 21) {
             final_soc = 0;
             if (++soc_fix_log_cnt % 20 == 0)
                 bq_dbg(PR_OEM, "DISCHARGE LOW VOLT FORCE SOC 0, volt:%dmV\n", real_volt);
@@ -774,9 +774,9 @@ static int fg_read_rsoc(struct bq_fg_chip *bq)
      last_soc = old_soc - 2;
  old_soc = last_soc;
  /* 充电状态下最低显示 3% */
-    if (batt_current < 0 && last_soc < 4) {
-        last_soc = 4;
-        old_soc = 4;
+    if (batt_current < 0 && last_soc < 21) {
+        last_soc = 20;
+        old_soc = 20;
     }
     return last_soc;
 }
