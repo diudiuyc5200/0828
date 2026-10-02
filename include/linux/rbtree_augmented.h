@@ -71,7 +71,66 @@ rb_insert_augmented_cached(struct rb_node *node,
 			      newleft, &root->rb_leftmost, augment->rotate);
 }
 
-#define RB_DECLARE_CALLBACKS(rbstatic, rbname, rbstruct, rbfield,	\
+static __always_inline struct rb_node *
+rb_add_augmented_cached(struct rb_node *node, struct rb_root_cached *tree,
+			bool (*less)(struct rb_node *, const struct rb_node *),
+			const struct rb_augment_callbacks *augment)
+{
+	struct rb_node **link = &tree->rb_root.rb_node;
+	struct rb_node *parent = NULL;
+	bool leftmost = true;
+
+	while (*link) {
+		parent = *link;
+		if (less(node, parent)) {
+			link = &parent->rb_left;
+		} else {
+			link = &parent->rb_right;
+			leftmost = false;
+		}
+	}
+
+	rb_link_node(node, parent, link);
+	augment->propagate(parent, NULL); /* suboptimal */
+	rb_insert_augmented_cached(node, tree, leftmost, augment);
+
+	return leftmost ? node : NULL;
+}
+
+#define _RB_DEC_CB_6(RBSTATIC, RBNAME,				\
+			     RBSTRUCT, RBFIELD, RBAUGMENTED, RBCOMPUTE)	\
+static inline void							\
+RBNAME ## _propagate(struct rb_node *rb, struct rb_node *stop)		\
+{									\
+	while (rb != stop) {						\
+		RBSTRUCT *node = rb_entry(rb, RBSTRUCT, RBFIELD);	\
+		if (RBCOMPUTE(node, true))				\
+			break;						\
+		rb = rb_parent(&node->RBFIELD);				\
+	}								\
+}									\
+static inline void							\
+RBNAME ## _copy(struct rb_node *rb_old, struct rb_node *rb_new)		\
+{									\
+	RBSTRUCT *old = rb_entry(rb_old, RBSTRUCT, RBFIELD);		\
+	RBSTRUCT *new = rb_entry(rb_new, RBSTRUCT, RBFIELD);		\
+	new->RBAUGMENTED = old->RBAUGMENTED;				\
+}									\
+static void								\
+RBNAME ## _rotate(struct rb_node *rb_old, struct rb_node *rb_new)	\
+{									\
+	RBSTRUCT *old = rb_entry(rb_old, RBSTRUCT, RBFIELD);		\
+	RBSTRUCT *new = rb_entry(rb_new, RBSTRUCT, RBFIELD);		\
+	new->RBAUGMENTED = old->RBAUGMENTED;				\
+	RBCOMPUTE(old, false);						\
+}									\
+RBSTATIC const struct rb_augment_callbacks RBNAME = {			\
+	.propagate = RBNAME ## _propagate,				\
+	.copy = RBNAME ## _copy,					\
+	.rotate = RBNAME ## _rotate					\
+};
+
+#define _RB_DEC_CB_7(rbstatic, rbname, rbstruct, rbfield,		\
 			     rbtype, rbaugmented, rbcompute)		\
 static inline void							\
 rbname ## _propagate(struct rb_node *rb, struct rb_node *stop)		\
@@ -105,6 +164,10 @@ rbstatic const struct rb_augment_callbacks rbname = {			\
 	.copy = rbname ## _copy,					\
 	.rotate = rbname ## _rotate					\
 };
+
+#define _RB_DEC_CB_CHOOSER(_1, _2, _3, _4, _5, _6, _7, NAME, ...) NAME
+#define RB_DECLARE_CALLBACKS(...) \
+	_RB_DEC_CB_CHOOSER(__VA_ARGS__, _RB_DEC_CB_7, _RB_DEC_CB_6)(__VA_ARGS__)
 
 
 #define	RB_RED		0

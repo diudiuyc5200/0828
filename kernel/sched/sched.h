@@ -510,6 +510,11 @@ struct cfs_rq {
 	struct load_weight load;
 	unsigned int nr_running, h_nr_running;
 
+	s64			sum_w_vruntime;
+	u64			sum_weight;
+	u64			zero_vruntime;
+	unsigned int		sum_shift;
+
 	u64 exec_clock;
 	u64 min_vruntime;
 #ifndef CONFIG_64BIT
@@ -3322,3 +3327,6 @@ struct sched_avg_stats {
 	int nr_max;
 };
 extern void sched_get_nr_running_avg(struct sched_avg_stats *stats);
+
+extern u64 avg_vruntime(struct cfs_rq *cfs_rq);
+extern int entity_eligible(struct cfs_rq *cfs_rq, struct sched_entity *se);
