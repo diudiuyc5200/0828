@@ -48,6 +48,9 @@
 
 #define OSM_REG_SIZE			32
 
+// CPU7 允许最大OSM档位，2841600kHz对应idx，自行从osm_table查表确认
+#define CPU7_MAX_PERF_IDX    19
+
 #define ENABLE_REG			0x0
 #define FREQ_REG			0x110
 #define VOLT_REG			0x114
@@ -586,9 +589,13 @@ static struct clk_osm *osm_configure_policy(struct cpufreq_policy *policy)
 static void
 osm_set_index(struct clk_osm *c, unsigned int index, unsigned int num)
 {
-	clk_osm_write_reg(c, index, DCVS_PERF_STATE_DESIRED_REG(num));
-
-	/* Make sure the write goes through before proceeding */
+	unsigned int final_idx = index;
+	// 判断当前是CPU7核心，强制封顶CPU7_MAX_PERF_IDX
+	if (c->core_num == 0 && c == &cpu7_perfpcl_clk) {
+		if (final_idx > CPU7_MAX_PERF_IDX)
+			final_idx = CPU7_MAX_PERF_IDX;
+	}
+	clk_osm_write_reg(c, final_idx, DCVS_PERF_STATE_DESIRED_REG(num));
 	clk_osm_mb(c);
 }
 
@@ -596,11 +603,14 @@ static int
 osm_cpufreq_target_index(struct cpufreq_policy *policy, unsigned int index)
 {
 	struct clk_osm *c = policy->driver_data;
-
-	osm_set_index(c, index, c->core_num);
+	unsigned int real_idx = index;
+	// CPU7强制封顶
+	if (policy->cpu == 7 && real_idx > CPU7_MAX_PERF_IDX)
+		real_idx = CPU7_MAX_PERF_IDX;
+	osm_set_index(c, real_idx, c->core_num);
 	arch_set_freq_scale(policy->related_cpus,
-			    policy->freq_table[index].frequency,
-			    policy->cpuinfo.max_freq);
+			    policy->freq_table[real_idx].frequency,
+			    policy->freq_table[CPU7_MAX_PERF_IDX].frequency);
 	return 0;
 }
 
@@ -608,14 +618,17 @@ static unsigned int
 osm_cpufreq_fast_switch(struct cpufreq_policy *policy, unsigned int target_freq)
 {
 	int index;
-
-	index = cpufreq_frequency_table_target(policy, target_freq,
-							CPUFREQ_RELATION_L);
+	unsigned int relation;
+	
+	relation = target_freq < policy->max ? CPUFREQ_RELATION_L :
+					       CPUFREQ_RELATION_H;
+	index = cpufreq_frequency_table_target(policy, target_freq, relation);
 	if (index < 0)
 		return 0;
-
+	// CPU7兜底限制
+	if (policy->cpu == 7 && index > CPU7_MAX_PERF_IDX)
+		index = CPU7_MAX_PERF_IDX;
 	osm_cpufreq_target_index(policy, index);
-
 	return policy->freq_table[index].frequency;
 }
 
@@ -979,44 +992,41 @@ static u64 clk_osm_get_cpu_cycle_counter(int cpu)
 static int clk_osm_read_lut(struct platform_device *pdev, struct clk_osm *c)
 {
 	u32 data, src, lval, i, j = c->osm_table_size;
-
 	c->dev = &pdev->dev;
 	for (i = 0; i < c->osm_table_size; i++) {
 		data = clk_osm_read_reg(c, FREQ_REG + i * OSM_REG_SIZE);
 		src = ((data & GENMASK(31, 30)) >> 30);
 		lval = (data & GENMASK(7, 0));
-
 		if (!src)
 			c->osm_table[i].frequency = OSM_INIT_RATE;
 		else
 			c->osm_table[i].frequency = XO_RATE * lval;
 
-		data = clk_osm_read_reg(c, VOLT_REG + i * OSM_REG_SIZE);
-		c->osm_table[i].virtual_corner =
-					((data & GENMASK(21, 16)) >> 16);
-		c->osm_table[i].open_loop_volt = (data & GENMASK(11, 0));
+		// 新增：CPU7所属perfpcl时钟，截断超过2841600000Hz的频点
+		if (c == &perfpcl_clk && c->osm_table[i].frequency > 2841600000UL) {
+			c->osm_table[i].frequency = 0; // 标记无效频点
+		}
 
+		data = clk_osm_read_reg(c, VOLT_REG + i * OSM_REG_SIZE);
+		c->osm_table[i].virtual_corner = ((data & GENMASK(21, 16)) >> 16);
+		c->osm_table[i].open_loop_volt = (data & GENMASK(11, 0));
 		pr_debug("index=%d freq=%ld virtual_corner=%d open_loop_voltage=%u\n",
 			 i, c->osm_table[i].frequency,
 			 c->osm_table[i].virtual_corner,
 			 c->osm_table[i].open_loop_volt);
-
 		if (i > 0 && j == c->osm_table_size &&
 				c->osm_table[i].frequency ==
 				c->osm_table[i - 1].frequency)
 			j = i;
 	}
-
 	osm_clks_init[c->cluster_num].rate_max = devm_kcalloc(&pdev->dev,
 						 j, sizeof(unsigned long),
 						       GFP_KERNEL);
 	if (!osm_clks_init[c->cluster_num].rate_max)
 		return -ENOMEM;
-
 	for (i = 0; i < j; i++)
 		osm_clks_init[c->cluster_num].rate_max[i] =
 					c->osm_table[i].frequency;
-
 	c->num_entries = osm_clks_init[c->cluster_num].num_rate_max = j;
 	return 0;
 }
