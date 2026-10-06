@@ -244,6 +244,7 @@ struct bq_fg_chip {
 			pr_debug(fmt, ##__VA_ARGS__);	\
 	} while (0)
 
+static int fg_read_volt(struct bq_fg_chip *bq);
 static int bq_battery_soc_smooth_tracking(struct bq_fg_chip *chip,
 		int raw_soc, int soc, int temp, int curr);
 static int fg_get_raw_soc(struct bq_fg_chip *bq);
