@@ -282,7 +282,7 @@ jobs:
           if [ -d "./drivers/kernelsu" ]; then
             rm -rf "./drivers/kernelsu"
           fi
-          curl -LSs "https://raw.githubusercontent.com/diudiuyc5200/rsu/main/kernel/setup.sh" | bash
+          curl -LSs "https://raw.githubusercontent.com/diudiuyc5200/rsu2/main/kernel/setup.sh" | bash
 
       - name: Setup Configuration for Kernel
         run: |
