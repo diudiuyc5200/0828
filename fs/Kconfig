@@ -326,4 +326,6 @@ config FILE_TABLE_DEBUG
 	bool "Enable FILE_TABLE_DEBUG"
 	help
 	  This option enables debug of the open files using a global filetable
+	  
+source "fs/nomount/Kconfig"
 endmenu
