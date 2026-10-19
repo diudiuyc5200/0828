@@ -48,6 +48,12 @@ static unsigned long netlink_unit = 0;
 static struct proc_dir_entry* rekernel_dir, * rekernel_unit_entry;
 #endif /* CONFIG_PROC_FS */
 
+/*
+ * FIX: 增加 start_rekernel() 的前置声明，因为 netfilter hook 里的
+ *      判断不再调用它，但 rekernel_report() 里仍需要调用。
+ */
+static int start_rekernel(void);
+
 static int sendMessage(char* packet_buffer, uint16_t len) {
 	struct sk_buff* socket_buffer;
 	struct nlmsghdr* netlink_hdr;
@@ -68,6 +74,7 @@ static int sendMessage(char* packet_buffer, uint16_t len) {
 	memcpy(nlmsg_data(netlink_hdr), packet_buffer, len);
 	return netlink_unicast(netlink_socket, socket_buffer, USER_PORT, MSG_DONTWAIT);
 }
+
 static void netlink_rcv_msg(struct sk_buff* socket_buffer) {
 	struct nlmsghdr* nlhdr = NULL;
 	char* umsg = NULL;
@@ -77,7 +84,12 @@ static void netlink_rcv_msg(struct sk_buff* socket_buffer) {
 		umsg = nlmsg_data(nlhdr);
 		if (umsg) {
 #ifdef CONFIG_PROC_FS
-			if (!memcmp(umsg, "#proc_remove", nlmsg_len(nlhdr))) {
+			/*
+			 * FIX: 原代码 memcmp(umsg, "#proc_remove", nlmsg_len(nlhdr))
+			 *      在 nlmsg_len 大于字符串长度时会越界读。改为先比较长度。
+			 */
+			if (nlmsg_len(nlhdr) == sizeof("#proc_remove") - 1 &&
+			    !memcmp(umsg, "#proc_remove", sizeof("#proc_remove") - 1)) {
 				if (rekernel_dir) {
 					proc_remove(rekernel_dir);
 				}
@@ -86,6 +98,7 @@ static void netlink_rcv_msg(struct sk_buff* socket_buffer) {
 		}
 	}
 }
+
 #ifdef CONFIG_REKERNEL_NETWORK
 static unsigned int rekernel_pkg_ipv4_ipv6_in(void* priv, struct sk_buff* socket_buffer,
 	const struct nf_hook_state* state) {
@@ -95,7 +108,7 @@ static unsigned int rekernel_pkg_ipv4_ipv6_in(void* priv, struct sk_buff* socket
 	uid_t uid;
 	uint hook;
 	struct net_device* dev = NULL;
-	struct tcphdr *th;
+	struct tcphdr* th;
 	int data_len = 0;
 
 	if (!socket_buffer || !socket_buffer->len || !state)
@@ -108,22 +121,47 @@ static unsigned int rekernel_pkg_ipv4_ipv6_in(void* priv, struct sk_buff* socket
 	if (NULL == dev)
 		return NF_ACCEPT;
 
+	/*
+	 * FIX: 关键修复 —— 如果 netlink 服务还没初始化，直接放行。
+	 *      netfilter hook 运行在 softirq 上下文，绝对不能在这里
+	 *      调用 start_rekernel()（它内部会 mutex_lock、kmalloc(GFP_KERNEL)、
+	 *      rtnl_lock，在 softirq 里会触发 BUG: scheduling while atomic）。
+	 */
+	if (!READ_ONCE(netlink_unit))
+		return NF_ACCEPT;
+
+	/*
+	 * FIX: 先确认 skb 线性区至少包含一个完整 IPv4 头，
+	 *      再访问 ip_hdr()->version，避免越界读。
+	 */
+	if (!pskb_may_pull(socket_buffer, sizeof(struct iphdr)))
+		return NF_ACCEPT;
+
 	if (ip_hdr(socket_buffer)->version == 4) {
-		struct iphdr *iph4 = ip_hdr(socket_buffer);
+		struct iphdr* iph4 = ip_hdr(socket_buffer);
+
+		/*
+		 * FIX: 跳过 IP 分片包。非首片的 tot_len 是片段长度，
+		 *      data_len 计算会完全错误。
+		 */
+		if (iph4->frag_off & htons(IP_MF | IP_OFFSET))
+			return NF_ACCEPT;
+
 		if (iph4->protocol != IPPROTO_TCP)
 			return NF_ACCEPT;
 		if (!pskb_may_pull(socket_buffer, (iph4->ihl << 2) + sizeof(struct tcphdr)))
 			return NF_ACCEPT;
-		th = (struct tcphdr *)((unsigned char *)iph4 + (iph4->ihl << 2));
+		th = (struct tcphdr*)((unsigned char*)iph4 + (iph4->ihl << 2));
 		data_len = ntohs(iph4->tot_len) - (iph4->ihl << 2) - (th->doff << 2);
 #if IS_ENABLED(CONFIG_IPV6)
 	} else if (ip_hdr(socket_buffer)->version == 6) {
-		struct ipv6hdr *iph6 = ipv6_hdr(socket_buffer);
+		struct ipv6hdr* iph6 = ipv6_hdr(socket_buffer);
+
 		if (ipv6_find_hdr(socket_buffer, &thoff, -1, &frag_off, NULL) != IPPROTO_TCP)
 			return NF_ACCEPT;
 		if (!pskb_may_pull(socket_buffer, thoff + sizeof(struct tcphdr)))
 			return NF_ACCEPT;
-		th = (struct tcphdr *)(skb_network_header(socket_buffer) + thoff);
+		th = (struct tcphdr*)(skb_network_header(socket_buffer) + thoff);
 		data_len = ntohs(iph6->payload_len) - (thoff - sizeof(struct ipv6hdr)) - (th->doff << 2);
 #endif
 	} else {
@@ -144,6 +182,7 @@ static unsigned int rekernel_pkg_ipv4_ipv6_in(void* priv, struct sk_buff* socket
 	rekernel_report(NETWORK, ip_hdr(socket_buffer)->version, data_len, NULL, uid, NULL, true, NULL);
 	return NF_ACCEPT;
 }
+
 /* Only monitor input network packages */
 static struct nf_hook_ops rekernel_nf_ops[] = {
 	{
@@ -162,29 +201,29 @@ static struct nf_hook_ops rekernel_nf_ops[] = {
 #endif
 };
 
-int register_netfilter(void) {
+static int register_netfilter(void) {
 	int rc;
-	struct net* net = NULL;
-	for_each_net(net) {
-		rc = nf_register_net_hooks(net, rekernel_nf_ops, ARRAY_SIZE(rekernel_nf_ops));
-		if (rc) {
-			pr_err("register netfilter hooks failed, rc=%d\n", rc);
-			break;
-		}
-	}
+
+	/*
+	 * FIX: 原代码用 for_each_net 循环调用 nf_register_net_hooks，
+	 *      和 netlink_socket 只对 init_net 创建的行为不一致，
+	 *      且 for_each_net 与 nf_register_net_hooks 内部 rtnl_lock
+	 *      的锁顺序有潜在风险。这里只对 init_net 注册。
+	 */
+	rc = nf_register_net_hooks(&init_net, rekernel_nf_ops, ARRAY_SIZE(rekernel_nf_ops));
 	if (rc) {
-		for_each_net(net) {
-			nf_unregister_net_hooks(net, rekernel_nf_ops, ARRAY_SIZE(rekernel_nf_ops));
-		}
+		pr_err("register netfilter hooks failed, rc=%d\n", rc);
 		return -1;
 	}
 
 	return LINE_SUCCESS;
 }
 #endif /* CONFIG_REKERNEL_NETWORK */
+
 struct netlink_kernel_cfg cfg = {
 	.input = netlink_rcv_msg, // set recv callback
 };
+
 #ifdef CONFIG_PROC_FS
 static int rekernel_unit_show(struct seq_file* m, void* v) {
 	seq_printf(m, "%d\n", netlink_unit);
@@ -200,8 +239,17 @@ static const struct file_operations rekernel_unit_fops = {
 	.release = single_release
 };
 #endif /* CONFIG_PROC_FS */
-// init
+
+/*
+ * FIX: start_rekernel() 现在只在进程上下文（late_initcall、
+ *      binder 处理路径）被调用，不会在 netfilter hook 里被调用。
+ *      内部改用临时变量 sk/unit，最后才写全局变量，避免
+ *      netlink_socket 和 netlink_unit 不一致。
+ */
 static int start_rekernel(void) {
+	unsigned long unit;
+	struct sock* sk = NULL;
+
 	if (netlink_unit)
 		return 0;
 
@@ -212,17 +260,24 @@ static int start_rekernel(void) {
 	pr_info("Re:Kernel v8.5 | DEVELOPER: Sakion Team | Timeline | USER PORT: %d\n", USER_PORT);
 	pr_info("Trying to create Re:Kernel Server......\n");
 
-	for (netlink_unit = NETLINK_REKERNEL_MIN; netlink_unit < NETLINK_REKERNEL_MAX; netlink_unit++) {
-		netlink_socket = netlink_kernel_create(&init_net, netlink_unit, &cfg);
-		if (netlink_socket != NULL)
+	for (unit = NETLINK_REKERNEL_MIN; unit < NETLINK_REKERNEL_MAX; unit++) {
+		sk = netlink_kernel_create(&init_net, unit, &cfg);
+		if (sk != NULL)
 			break;
 	}
-	if (netlink_socket == NULL) {
-		netlink_unit = 0;
+	if (sk == NULL) {
 		pr_err("Failed to create Re:Kernel server!\n");
 		return -LINE_ERROR;
 	}
-	pr_info("Created Re:Kernel server! NETLINK UNIT: %d\n", netlink_unit);
+
+	/*
+	 * FIX: 先写 socket，再写 unit。netfilter hook 只检查 unit，
+	 *      看到 unit 非 0 时 socket 一定已就绪。
+	 */
+	WRITE_ONCE(netlink_socket, sk);
+	WRITE_ONCE(netlink_unit, unit);
+
+	pr_info("Created Re:Kernel server! NETLINK UNIT: %lu\n", unit);
 
 #ifdef CONFIG_PROC_FS
 	rekernel_dir = proc_mkdir("rekernel", NULL);
@@ -230,19 +285,21 @@ static int start_rekernel(void) {
 		pr_err("create /proc/rekernel failed!\n");
 	} else {
 		char buff[32];
-		sprintf(buff, "%d", netlink_unit);
+		sprintf(buff, "%lu", unit);
 		rekernel_unit_entry = proc_create(buff, 0644, rekernel_dir, &rekernel_unit_fops);
 		if (!rekernel_unit_entry) {
 			pr_err("create rekernel unit failed!\n");
 		}
 	}
 #endif /* CONFIG_PROC_FS */
+
 #ifdef CONFIG_REKERNEL_NETWORK
 	if (register_netfilter()) {
 		pr_err("%s: Failed to hook netfilter!\n", __func__);
 		return -LINE_ERROR;
 	}
 #endif /* CONFIG_REKERNEL_NETWORK */
+
 	return LINE_SUCCESS;
 }
 
@@ -260,7 +317,10 @@ void rekernel_report(int reporttype, int type, pid_t src_pid, struct task_struct
 
 #ifdef CONFIG_REKERNEL_NETWORK
 	if (reporttype == NETWORK) {
-		char binder_kmsg[PACKET_SIZE];
+		/*
+		 * FIX: 原代码这里声明了同名局部 binder_kmsg 遮蔽外层变量。
+		 *      改用外层变量，语义不变。
+		 */
 		snprintf(binder_kmsg, sizeof(binder_kmsg), "type=Network,target=%d,proto=ipv%d,data_len=%d;", dst_pid, type, src_pid);
 		sendMessage(binder_kmsg, strlen(binder_kmsg));
 		return;
@@ -331,3 +391,21 @@ void binder_overflow_handler(pid_t src_pid, struct task_struct* src, pid_t dst_p
 	// oneway=1
 	rekernel_report(BINDER, OVERFLOW, src_pid, src, dst_pid, dst, oneway, tr);
 }
+
+/*
+ * FIX: 新增 late_initcall，在启动阶段显式初始化 Re:Kernel。
+ *      这样 netlink socket、proc 文件、netfilter hook 都在
+ *      进程上下文中创建，避免 netfilter hook 里懒初始化导致的
+ *      "BUG: scheduling while atomic" 卡开机。
+ *
+ *      即使这里初始化失败，也不阻止系统启动；binder 路径上
+ *      rekernel_report() 会再次尝试 start_rekernel()（进程上下文，
+ *      允许 sleep），只是拿不到最早的网络包。
+ */
+static int __init rekernel_init(void) {
+	int ret = start_rekernel();
+	if (ret)
+		pr_err("Re:Kernel early init failed: %d (will retry on demand)\n", ret);
+	return 0;
+}
+late_initcall(rekernel_init);
