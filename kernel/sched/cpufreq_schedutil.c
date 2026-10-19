@@ -427,11 +427,16 @@ static void sugov_update_single(struct update_util_data *hook, u64 time,
 		 * 针对大核（CPU >= 4）的轻负载快速升频
 		 * 如果 util 超过阈值，直接跳到最大频率的 70%
 		 */
-		if (policy->cpu == 7 && util > 20) {
-			unsigned int target = policy->max * 68 / 100;
-			if (next_f < target)
-				next_f = target;
-		}
+		if (policy->cpu == 4 && util > 15) {
+	unsigned int target = policy->max * 80 / 100;
+	if (next_f < target)
+		next_f = target;
+}
+if (policy->cpu == 7 && util > 10) {
+	unsigned int target = policy->max * 75 / 100;
+	if (next_f < target)
+		next_f = target;
+}
 		
 		/*
 		 * Do not reduce the frequency if the CPU has not been idle
